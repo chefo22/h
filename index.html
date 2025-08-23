@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obtener HTML de URL con Proxy</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            color: #555;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Obtener HTML de una URL</h1>
+        <div class="form-group">
+            <label for="urlInput">Introduce la URL:</label>
+            <input type="text" id="urlInput" placeholder="Ej: https://example.com">
+        </div>
+        <button id="fetchButton">Obtener HTML</button>
+        <div id="result">
+            <pre id="htmlContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fetchButton').addEventListener('click', async () => {
+            const urlInput = document.getElementById('urlInput').value;
+            const htmlContent = document.getElementById('htmlContent');
+
+            if (!urlInput) {
+                htmlContent.textContent = 'Por favor, introduce una URL.';
+                htmlContent.classList.add('error');
+                return;
+            }
+
+            htmlContent.textContent = 'Cargando...';
+            htmlContent.classList.add('loading');
+            htmlContent.classList.remove('error');
+
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlInput)}`;
+
+            try {
+                const response = await fetch(proxyUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+
+                const text = await response.text();
+                htmlContent.textContent = text;
+                htmlContent.classList.remove('loading');
+
+            } catch (error) {
+                htmlContent.textContent = `Error: ${error.message}. Asegúrate de que la URL es válida y accesible.`;
+                htmlContent.classList.add('error');
+                htmlContent.classList.remove('loading');
+            }
+        });
+    </script>
+
+</body>
+</html>
