@@ -2,132 +2,111 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TV Demo - Scroll Method</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Control TV 3x3</title>
     <style>
-        body, html {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            background: #111; color: white;
-            overflow: hidden; /* Evitamos el scroll real */
+        body {
+            background-color: #121212;
+            color: white;
             font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
 
-        /* 1. El área de detección (Gigante para permitir scroll interno) */
-        #scroll-canvas {
-            position: absolute;
-            top: 0; left: 0;
-            width: 200vw; /* El doble del ancho */
-            height: 200vh; /* El doble del alto */
-            overflow: scroll;
-            z-index: 1;
+        /* Contenedor de la cuadrícula */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 150px);
+            grid-template-rows: repeat(3, 150px);
+            gap: 20px;
         }
 
-        /* Contenido falso para forzar al navegador a creer que hay scroll */
-        #dummy-content { width: 400vw; height: 400vh; }
-
-        /* 2. La interfaz visual (encima de todo) */
-        .ui-layer {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            z-index: 10;
-            pointer-events: none; /* Deja que el scroll pase a la capa de abajo */
+        /* Estilo de los botones */
+        .btn-tv {
+            background-color: #333;
+            border: 4px solid transparent;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
         }
 
-        .grid {
-            display: grid; grid-template-columns: repeat(3, 120px);
-            gap: 15px; pointer-events: auto; /* Los botones sí captan clics */
+        /* ESTADO CRÍTICO: Cuando el mando está sobre el botón */
+        .btn-tv:focus {
+            outline: none;
+            border-color: #00ffcc; /* Color Neón */
+            background-color: #444;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
         }
-
-        .item {
-            width: 120px; height: 120px; background: #333;
-            border-radius: 10px; display: flex; align-items: center;
-            justify-content: center; font-size: 2rem; border: 4px solid transparent;
-        }
-
-        .item.active {
-            border-color: #ff0055; background: #444; transform: scale(1.1);
-        }
-
-        #status { margin-bottom: 20px; color: #ff0055; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="scroll-canvas">
-        <div id="dummy-content"></div>
-    </div>
-
-    <div class="ui-layer">
-        <div id="status">HAZ CLIC UNA VEZ PARA EMPEZAR</div>
-        <div class="grid">
-            <div class="item" id="i0">1</div>
-            <div class="item" id="i1">2</div>
-            <div class="item" id="i2">3</div>
-            <div class="item" id="i3">4</div>
-            <div class="item" id="i4">5</div>
-            <div class="item" id="i5">6</div>
-            <div class="item" id="i6">7</div>
-            <div class="item" id="i7">8</div>
-            <div class="item" id="i8">9</div>
-        </div>
+    <div class="grid-container" id="grid">
+        <button class="btn-tv">1</button>
+        <button class="btn-tv">2</button>
+        <button class="btn-tv">3</button>
+        <button class="btn-tv">4</button>
+        <button class="btn-tv">5</button>
+        <button class="btn-tv">6</button>
+        <button class="btn-tv">7</button>
+        <button class="btn-tv">8</button>
+        <button class="btn-tv">9</button>
     </div>
 
     <script>
-        const canvas = document.getElementById('scroll-canvas');
-        const status = document.getElementById('status');
-        let currentIndex = 4;
-        let isReady = false;
+        // Configuración de la cuadrícula
+        const COLUMNAS = 3;
+        const FILAS = 3;
+        
+        // Obtenemos todos los botones en una lista plana
+        const botones = document.querySelectorAll('.btn-tv');
+        
+        // Posición inicial
+        let filaActual = 0;
+        let colActual = 0;
 
-        // Centramos el scroll al inicio
-        function centerScroll() {
-            canvas.scrollLeft = window.innerWidth / 2;
-            canvas.scrollTop = window.innerHeight / 2;
+        // Función para poner el foco basado en coordenadas
+        function actualizarFoco() {
+            // Fórmula para convertir (Fila, Columna) en el índice del Array (0-8)
+            // Índice = (Fila * Total de Columnas) + Columna
+            const indice = (filaActual * COLUMNAS) + colActual;
+            botones[indice].focus();
         }
 
-        function update() {
-            document.querySelectorAll('.item').forEach((el, idx) => {
-                el.classList.toggle('active', idx === currentIndex);
-            });
-        }
+        // Iniciamos el foco en el primer botón
+        actualizarFoco();
 
-        // Importante: El navegador necesita un clic para "activar" la escucha
-        window.addEventListener('mousedown', () => {
-            if (!isReady) {
-                isReady = true;
-                status.innerText = "¡SISTEMA ACTIVO! Mueve el mando.";
-                centerScroll();
+        // Escuchar eventos del mando (teclado)
+        document.addEventListener('keydown', (event) => {
+            switch(event.key) {
+                case 'ArrowUp':
+                    if (filaActual > 0) filaActual--;
+                    break;
+                case 'ArrowDown':
+                    if (filaActual < FILAS - 1) filaActual++;
+                    break;
+                case 'ArrowLeft':
+                    if (colActual > 0) colActual--;
+                    break;
+                case 'ArrowRight':
+                    if (colActual < COLUMNAS - 1) colActual++;
+                    break;
+                case 'Enter':
+                    document.activeElement.style.backgroundColor = "red";
+                    setTimeout(() => document.activeElement.style.backgroundColor = "", 500);
+                    break;
             }
+            actualizarFoco();
         });
-
-        canvas.addEventListener('scroll', () => {
-            if (!isReady) return;
-
-            const diffX = canvas.scrollLeft - (window.innerWidth / 2);
-            const diffY = canvas.scrollTop - (window.innerHeight / 2);
-            const threshold = 20; // Sensibilidad
-
-            let moved = false;
-
-            if (Math.abs(diffY) > threshold) {
-                if (diffY > 0 && currentIndex < 6) { currentIndex += 3; moved = true; }
-                else if (diffY < 0 && currentIndex > 2) { currentIndex -= 3; moved = true; }
-            } else if (Math.abs(diffX) > threshold) {
-                if (diffX > 0 && (currentIndex + 1) % 3 !== 0) { currentIndex += 1; moved = true; }
-                else if (diffX < 0 && currentIndex % 3 !== 0) { currentIndex -= 1; moved = true; }
-            }
-
-            if (moved) {
-                update();
-                // Recentramos para permitir el siguiente movimiento
-                centerScroll();
-            }
-        }, { passive: true });
-
-        update();
-        centerScroll();
     </script>
 </body>
 </html>
