@@ -2,111 +2,120 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Demo Control TV 3x3</title>
+    <title>TV Remote Hack - Invisible Joystick</title>
     <style>
-        body {
-            background-color: #121212;
-            color: white;
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
+        body { background-color: #1a1a1a; color: white; margin: 0; overflow: hidden; font-family: sans-serif; }
 
-        /* Contenedor de la cuadrícula */
-        .grid-container {
+        /* Cuadrícula de prueba */
+        .grid {
             display: grid;
-            grid-template-columns: repeat(3, 150px);
-            grid-template-rows: repeat(3, 150px);
-            gap: 20px;
+            grid-template-columns: repeat(3, 120px);
+            gap: 15px;
+            justify-content: center;
+            align-content: center;
+            height: 100vh;
         }
 
-        /* Estilo de los botones */
-        .btn-tv {
-            background-color: #333;
-            border: 4px solid transparent;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
+        .btn {
+            width: 120px; height: 120px;
+            background: #444; border: 4px solid transparent;
+            color: white; font-size: 2rem;
+        }
+
+        /* Estilo del botón enfocado */
+        .btn:focus {
+            outline: none;
+            border-color: #00ffcc;
+            transform: scale(1.1);
+            background: #555;
+        }
+
+        /* LA VENTANA INVISIBLE (El "Joystick") */
+        #joystick-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.1); /* Cambia a 0 para total invisibilidad */
+            border: 2px dashed #777;
+            z-index: 9999;
             display: flex;
             justify-content: center;
             align-items: center;
-            border-radius: 10px;
         }
 
-        /* ESTADO CRÍTICO: Cuando el mando está sobre el botón */
-        .btn-tv:focus {
-            outline: none;
-            border-color: #00ffcc; /* Color Neón */
-            background-color: #444;
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+        .sensor {
+            position: absolute;
+            background: rgba(255, 0, 0, 0.2); /* Solo para ver dónde tocas */
         }
+
+        /* Áreas de colisión */
+        .up    { top: 0; left: 0; width: 100%; height: 30%; }
+        .down  { bottom: 0; left: 0; width: 100%; height: 30%; }
+        .left  { left: 0; top: 0; width: 30%; height: 100%; }
+        .right { right: 0; top: 0; width: 30%; height: 100%; }
     </style>
 </head>
 <body>
 
-    <div class="grid-container" id="grid">
-        <button class="btn-tv">1</button>
-        <button class="btn-tv">2</button>
-        <button class="btn-tv">3</button>
-        <button class="btn-tv">4</button>
-        <button class="btn-tv">5</button>
-        <button class="btn-tv">6</button>
-        <button class="btn-tv">7</button>
-        <button class="btn-tv">8</button>
-        <button class="btn-tv">9</button>
+    <div class="grid">
+        <button class="btn" tabindex="0">1</button>
+        <button class="btn" tabindex="0">2</button>
+        <button class="btn" tabindex="0">3</button>
+        <button class="btn" tabindex="0">4</button>
+        <button class="btn" tabindex="0">5</button>
+        <button class="btn" tabindex="0">6</button>
+        <button class="btn" tabindex="0">7</button>
+        <button class="btn" tabindex="0">8</button>
+        <button class="btn" tabindex="0">9</button>
+    </div>
+
+    <div id="joystick-container">
+        <div class="sensor up" data-dir="up"></div>
+        <div class="sensor down" data-dir="down"></div>
+        <div class="sensor left" data-dir="left"></div>
+        <div class="sensor right" data-dir="right"></div>
+        <small style="font-size: 10px; pointer-events: none;">SENSAR AQUÍ</small>
     </div>
 
     <script>
-        // Configuración de la cuadrícula
-        const COLUMNAS = 3;
-        const FILAS = 3;
-        
-        // Obtenemos todos los botones en una lista plana
-        const botones = document.querySelectorAll('.btn-tv');
-        
-        // Posición inicial
-        let filaActual = 0;
-        let colActual = 0;
+        const botones = document.querySelectorAll('.btn');
+        let indiceActual = 0;
+        let bloqueado = false; // Para evitar saltos múltiples rápidos
 
-        // Función para poner el foco basado en coordenadas
-        function actualizarFoco() {
-            // Fórmula para convertir (Fila, Columna) en el índice del Array (0-8)
-            // Índice = (Fila * Total de Columnas) + Columna
-            const indice = (filaActual * COLUMNAS) + colActual;
-            botones[indice].focus();
+        // Función para mover el foco
+        function mover(direccion) {
+            if (bloqueado) return;
+
+            let nuevoIndice = indiceActual;
+
+            if (direccion === 'up' && indiceActual >= 3) nuevoIndice -= 3;
+            if (direccion === 'down' && indiceActual < 6) nuevoIndice += 3;
+            if (direccion === 'left' && indiceActual % 3 !== 0) nuevoIndice -= 1;
+            if (direccion === 'right' && (indiceActual + 1) % 3 !== 0) nuevoIndice += 1;
+
+            if (nuevoIndice !== indiceActual) {
+                indiceActual = nuevoIndice;
+                botones[indiceActual].focus();
+                
+                // Bloqueo temporal para que el usuario tenga que 
+                // mover el ratón fuera del borde para pulsar otra vez
+                bloqueado = true; 
+                setTimeout(() => { bloqueado = false; }, 400); 
+            }
         }
 
-        // Iniciamos el foco en el primer botón
-        actualizarFoco();
-
-        // Escuchar eventos del mando (teclado)
-        document.addEventListener('keydown', (event) => {
-            switch(event.key) {
-                case 'ArrowUp':
-                    if (filaActual > 0) filaActual--;
-                    break;
-                case 'ArrowDown':
-                    if (filaActual < FILAS - 1) filaActual++;
-                    break;
-                case 'ArrowLeft':
-                    if (colActual > 0) colActual--;
-                    break;
-                case 'ArrowRight':
-                    if (colActual < COLUMNAS - 1) colActual++;
-                    break;
-                case 'Enter':
-                    document.activeElement.style.backgroundColor = "red";
-                    setTimeout(() => document.activeElement.style.backgroundColor = "", 500);
-                    break;
-            }
-            actualizarFoco();
+        // Configurar los sensores
+        document.querySelectorAll('.sensor').forEach(sensor => {
+            sensor.addEventListener('mouseenter', () => {
+                const dir = sensor.getAttribute('data-dir');
+                mover(dir);
+            });
         });
+
+        // Iniciar foco
+        botones[0].focus();
     </script>
 </body>
 </html>
