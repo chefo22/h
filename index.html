@@ -2,157 +2,104 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Demo TV - Zonas Sensibles</title>
+    <title>TV Demo - Sensor System</title>
     <style>
-        :root {
-            --bg-color: #0f0f0f;
-            --grid-color: #222;
-            --active-color: #ff3e00;
+        body {
+            margin: 0; background: #111; color: white;
+            font-family: sans-serif; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; height: 100vh;
         }
 
-        body, html {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            background-color: var(--bg-color);
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            cursor: none; /* Ocultamos el ratón */
-        }
-
-        /* Cuadrícula de prueba 3x3 */
-        .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            z-index: 10;
-            position: relative;
-        }
-
+        /* 1. La cuadrícula de 3x3 */
         .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 120px);
-            gap: 20px;
+            display: grid; grid-template-columns: repeat(3, 120px);
+            gap: 15px; position: relative; z-index: 10;
+        }
+        .item {
+            width: 120px; height: 120px; background: #333;
+            border-radius: 10px; display: flex; align-items: center;
+            justify-content: center; font-size: 2rem; border: 4px solid transparent;
+        }
+        .item.active {
+            border-color: #00ffcc; background: #444; transform: scale(1.1);
         }
 
-        .cell {
-            width: 120px;
-            height: 120px;
-            background: var(--grid-color);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            font-weight: bold;
-            border: 4px solid transparent;
-            transition: all 0.15s ease;
+        /* 2. LOS SENSORES: Estos ocupan toda la pantalla detrás */
+        .sensor-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: grid; grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 1fr 2fr 1fr; z-index: 5;
+        }
+        .sensor { 
+            /* background: rgba(255,0,0,0.1); /* Descomenta para ver los sensores */
+            border: 1px solid rgba(255,255,255,0.05);
         }
 
-        /* Clase que indica dónde está el "foco" */
-        .cell.selected {
-            border-color: var(--active-color);
-            background: #333;
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 62, 0, 0.4);
-        }
-
-        /* ZONAS DE CONTROL (Invisibles para el usuario final) */
-        .sensor {
-            position: fixed;
-            z-index: 5;
-            /* background: rgba(255, 255, 255, 0.03); /* Descomenta para ver las zonas */
-        }
-
-        #up    { top: 0; left: 25%; width: 50%; height: 20%; }
-        #down  { bottom: 0; left: 25%; width: 50%; height: 20%; }
-        #left  { top: 25%; left: 0; width: 20%; height: 50%; }
-        #right { top: 25%; right: 0; width: 20%; height: 50%; }
-        #center { top: 30%; left: 30%; width: 40%; height: 40%; }
-
-        #info {
-            position: fixed;
-            bottom: 20px;
-            color: #555;
-            font-size: 0.9rem;
-        }
+        /* Indicador de depuración */
+        #status { position: fixed; top: 10px; color: #555; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Demo de Navegación</h1>
-        <div class="grid" id="grid">
-            <div class="cell" id="c0">1</div>
-            <div class="cell" id="c1">2</div>
-            <div class="cell" id="c2">3</div>
-            <div class="cell" id="c3">4</div>
-            <div class="cell" id="c4">5</div>
-            <div class="cell" id="c5">6</div>
-            <div class="cell" id="c6">7</div>
-            <div class="cell" id="c7">8</div>
-            <div class="cell" id="c8">9</div>
-        </div>
-        <div id="info">Mueve el puntero a los bordes de la pantalla</div>
+    <div id="status">Pasa el puntero por los bordes...</div>
+
+    <div class="sensor-layer">
+        <div class="sensor" onmouseover="move('up-left')"></div>
+        <div class="sensor" onmouseover="move('up')"></div>
+        <div class="sensor" onmouseover="move('up-right')"></div>
+        
+        <div class="sensor" onmouseover="move('left')"></div>
+        <div class="sensor" onmouseover="resetMove()"></div> <div class="sensor" onmouseover="move('right')"></div>
+        
+        <div class="sensor" onmouseover="move('down-left')"></div>
+        <div class="sensor" onmouseover="move('down')"></div>
+        <div class="sensor" onmouseover="move('down-right')"></div>
     </div>
 
-    <div class="sensor" id="up"></div>
-    <div class="sensor" id="down"></div>
-    <div class="sensor" id="left"></div>
-    <div class="sensor" id="right"></div>
-    <div class="sensor" id="center"></div>
+    <div class="grid">
+        <div class="item" id="i0">1</div>
+        <div class="item" id="i1">2</div>
+        <div class="item" id="i2">3</div>
+        <div class="item" id="i3">4</div>
+        <div class="item" id="i4">5</div>
+        <div class="item" id="i5">6</div>
+        <div class="item" id="i6">7</div>
+        <div class="item" id="i7">8</div>
+        <div class="item" id="i8">9</div>
+    </div>
 
     <script>
         let currentIndex = 4; // Empezamos en el 5
-        let canMove = true;   // Control de flujo (debe volver al centro)
+        let canMove = true;   // Para evitar que se mueva infinitamente
 
-        const cells = document.querySelectorAll('.cell');
-
-        function updateUI() {
-            cells.forEach(c => c.classList.remove('selected'));
-            cells[currentIndex].classList.add('selected');
+        function update() {
+            document.querySelectorAll('.item').forEach((el, idx) => {
+                el.classList.toggle('active', idx === currentIndex);
+            });
         }
 
-        function move(direction) {
+        function move(dir) {
             if (!canMove) return;
 
-            if (direction === 'up' && currentIndex > 2) currentIndex -= 3;
-            if (direction === 'down' && currentIndex < 6) currentIndex += 3;
-            if (direction === 'left' && currentIndex % 3 !== 0) currentIndex -= 1;
-            if (direction === 'right' && (currentIndex + 1) % 3 !== 0) currentIndex += 1;
+            document.getElementById('status').innerText = "Último movimiento: " + dir;
 
-            updateUI();
-            canMove = false; // Bloqueamos movimiento hasta que vuelva al centro
-            console.log("Movido a: " + direction);
+            if (dir.includes('up') && currentIndex > 2) currentIndex -= 3;
+            if (dir.includes('down') && currentIndex < 6) currentIndex += 3;
+            if (dir.includes('left') && currentIndex % 3 !== 0) currentIndex -= 1;
+            if (dir.includes('right') && (currentIndex + 1) % 3 !== 0) currentIndex += 1;
+
+            update();
+            canMove = false; // Bloqueamos hasta que el puntero pase por el centro
         }
 
-        // Listeners para los sensores
-        document.getElementById('up').onmouseover = () => move('up');
-        document.getElementById('down').onmouseover = () => move('down');
-        document.getElementById('left').onmouseover = () => move('left');
-        document.getElementById('right').onmouseover = () => move('right');
-
-        // El centro desbloquea el movimiento (actúa como el "neutral" del joystick)
-        document.getElementById('center').onmouseover = () => {
+        // El usuario debe volver a llevar el ratón al área central para "desbloquear" otro movimiento
+        function resetMove() {
             canMove = true;
-            console.log("Joystick en posición NEUTRAL");
-        };
+            document.getElementById('status').innerText = "Listo para mover";
+        }
 
-        // Simular click
-        window.onclick = () => {
-            const activeCell = cells[currentIndex];
-            activeCell.style.backgroundColor = "white";
-            activeCell.style.color = "black";
-            setTimeout(() => {
-                activeCell.style.backgroundColor = "";
-                activeCell.style.color = "";
-            }, 200);
-        };
-
-        // Inicio
-        updateUI();
+        // Ejecutar al inicio
+        update();
     </script>
 </body>
 </html>
