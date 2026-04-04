@@ -3,126 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Obtener HTML de URL con Proxy</title>
+    <title>Demo TV Navigation - Mouse to Arrows</title>
     <style>
+        /* Ocultar el cursor en toda la pantalla */
         body {
-            font-family: sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-        }
-        .container {
-            max-width: 800px;
-            margin: auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #4CAF50;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            background-color: #4CAF50;
+            background-color: #1a1a1a;
             color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            cursor: none; /* Intentar ocultar el ratón simulado */
+            overflow: hidden;
         }
-        button:hover {
-            background-color: #45a049;
+
+        h1 { margin-bottom: 20px; font-size: 1.5rem; }
+
+        /* Contenedor de la cuadrícula */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 150px);
+            grid-template-rows: repeat(3, 150px);
+            gap: 20px;
         }
-        pre {
-            background-color: #f8f8f8;
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+
+        /* Estilo de los botones */
+        .grid-item {
+            background-color: #333;
+            border: 4px solid transparent;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #aaa;
+            transition: all 0.2s ease;
         }
-        #result {
-            margin-top: 20px;
+
+        /* Estilo cuando el botón tiene el FOCO (simulando selección de TV) */
+        .grid-item:focus {
+            outline: none;
+            border-color: #00ff88;
+            background-color: #444;
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
         }
-        .error {
-            color: red;
-            font-weight: bold;
-        }
-        .loading {
-            text-align: center;
-            color: #555;
-            font-style: italic;
+
+        .debug-info {
+            margin-top: 30px;
+            padding: 10px;
+            background: #000;
+            border-radius: 5px;
+            font-family: monospace;
+            color: #00ff88;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Obtener HTML de una URL</h1>
-        <div class="form-group">
-            <label for="urlInput">Introduce la URL:</label>
-            <input type="text" id="urlInput" placeholder="Ej: https://example.com">
-        </div>
-        <button id="fetchButton">Obtener HTML</button>
-        <div id="result">
-            <pre id="htmlContent"></pre>
-        </div>
+    <h1>Test de Navegación TV</h1>
+    
+    <div class="grid-container">
+        <button class="grid-item" id="b1">1</button>
+        <button class="grid-item" id="b2">2</button>
+        <button class="grid-item" id="b3">3</button>
+        <button class="grid-item" id="b4">4</button>
+        <button class="grid-item" id="b5">5</button>
+        <button class="grid-item" id="b6">6</button>
+        <button class="grid-item" id="b7">7</button>
+        <button class="grid-item" id="b8">8</button>
+        <button class="grid-item" id="b9">9</button>
     </div>
 
-    <script>
-        document.getElementById('fetchButton').addEventListener('click', async () => {
-            const urlInput = document.getElementById('urlInput').value;
-            const htmlContent = document.getElementById('htmlContent');
+    <div class="debug-info" id="debug">Mueve el ratón para empezar</div>
 
-            if (!urlInput) {
-                htmlContent.textContent = 'Por favor, introduce una URL.';
-                htmlContent.classList.add('error');
+    <script>
+        // --- CONFIGURACIÓN ---
+        const THRESHOLD = 40; // Píxeles de movimiento necesarios
+        const debugElement = document.getElementById('debug');
+        
+        let lastX = null;
+        let lastY = null;
+
+        // Poner el foco inicial en el centro (botón 5)
+        document.getElementById('b5').focus();
+
+        // --- LÓGICA DE CONVERSIÓN ---
+        document.addEventListener('mousemove', (e) => {
+            if (lastX === null || lastY === null) {
+                lastX = e.clientX;
+                lastY = e.clientY;
                 return;
             }
 
-            htmlContent.textContent = 'Cargando...';
-            htmlContent.classList.add('loading');
-            htmlContent.classList.remove('error');
+            const diffX = e.clientX - lastX;
+            const diffY = e.clientY - lastY;
 
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlInput)}`;
+            let direction = null;
 
-            try {
-                const response = await fetch(proxyUrl);
-                
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
-                }
+            // Detectar dirección
+            if (Math.abs(diffY) > THRESHOLD) {
+                direction = diffY > 0 ? 'ArrowDown' : 'ArrowUp';
+            } else if (Math.abs(diffX) > THRESHOLD) {
+                direction = diffX > 0 ? 'ArrowRight' : 'ArrowLeft';
+            }
 
-                const text = await response.text();
-                htmlContent.textContent = text;
-                htmlContent.classList.remove('loading');
-
-            } catch (error) {
-                htmlContent.textContent = `Error: ${error.message}. Asegúrate de que la URL es válida y accesible.`;
-                htmlContent.classList.add('error');
-                htmlContent.classList.remove('loading');
+            if (direction) {
+                simulateKeyPress(direction);
+                // Reiniciamos las coordenadas para el siguiente "paso"
+                lastX = e.clientX;
+                lastY = e.clientY;
             }
         });
-    </script>
 
+        function simulateKeyPress(key) {
+            debugElement.textContent = "Acción: " + key;
+            
+            // Creamos el evento de teclado
+            const event = new KeyboardEvent('keydown', {
+                key: key,
+                code: key,
+                bubbles: true,
+                cancelable: true
+            });
+
+            // Disparamos el evento
+            document.dispatchEvent(event);
+
+            // Ayudamos al navegador a mover el foco manualmente si es necesario
+            moveFocus(key);
+        }
+
+        // Esta función ayuda a que el foco salte entre los botones de la cuadrícula
+        function moveFocus(key) {
+            const current = document.activeElement;
+            if (!current || !current.id.startsWith('b')) return;
+
+            const id = parseInt(current.id.replace('b', ''));
+            let nextId = id;
+
+            if (key === 'ArrowUp' && id > 3) nextId -= 3;
+            if (key === 'ArrowDown' && id <= 6) nextId += 3;
+            if (key === 'ArrowLeft' && id % 3 !== 1) nextId -= 1;
+            if (key === 'ArrowRight' && id % 3 !== 0) nextId += 1;
+
+            const nextElement = document.getElementById('b' + nextId);
+            if (nextElement) nextElement.focus();
+        }
+    </script>
 </body>
 </html>
