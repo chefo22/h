@@ -2,126 +2,177 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TV Bro Edge Navigation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor de Navegación por Puntero</title>
     <style>
-        /* 1. OCULTAMOS EL CURSOR EN TODA LA WEB */
-        * { cursor: none !important; }
-
+        /* * 1. REGLAS DE CONTROL Y VISIBILIDAD 
+         * Ocultamos el cursor en toda la página y evitamos el scroll.
+         */
         body {
-            background: #000;
-            color: white;
             margin: 0;
             padding: 0;
-            overflow: hidden; /* Evita que la web haga scroll */
-            font-family: sans-serif;
-        }
-
-        /* Cuadrícula 3x3 */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 160px);
-            gap: 20px;
-            justify-content: center;
-            align-content: center;
+            width: 100vw;
             height: 100vh;
-        }
-
-        .caja {
-            width: 160px;
-            height: 160px;
-            background: #222;
-            border: 5px solid #444;
+            background-color: #1e1e2e;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; 
+            cursor: none; /* ¡Invisibilidad total del puntero! */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 3rem;
-            border-radius: 15px;
-            transition: 0.2s;
         }
 
-        /* Estilo para el elemento seleccionado */
-        .activo {
-            border-color: #ff3c00;
-            background: #441a00;
-            transform: scale(1.15);
-            box-shadow: 0 0 30px rgba(255, 60, 0, 0.6);
+        /* * 2. EL ENTORNO DE PRUEBAS (SANDBOX)
+         * Cuadrícula central de 3 columnas por 3 filas.
+         */
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-template-rows: repeat(3, 120px);
+            gap: 15px;
         }
 
-        /* SENSORES DE BORDE (Invisibles) */
-        .sensor {
-            position: fixed;
-            z-index: 9999;
-            /* background: rgba(255, 255, 255, 0.1); */ /* Descomenta para verlos al probar */
+        .cell {
+            background-color: #313244;
+            border: 2px solid #45475a;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #6c7086;
+            transition: all 0.2s ease-in-out;
         }
-        .s-top    { top: 0; left: 0; width: 100%; height: 40px; }
-        .s-bottom { bottom: 0; left: 0; width: 100%; height: 40px; }
-        .s-left   { top: 0; left: 0; width: 40px; height: 100%; }
-        .s-right  { top: 0; right: 0; width: 40px; height: 100%; }
-        
-        /* Zona Neutral para resetear el joystick */
-        .s-center {
-            top: 20%; left: 20%; width: 60%; height: 60%;
+
+        /* Estado de Foco Único */
+        .cell.active {
+            background-color: #cba6f7;
+            border-color: #b4befe;
+            color: #11111b;
+            box-shadow: 0 0 20px rgba(203, 166, 247, 0.5);
+            transform: scale(1.05);
         }
+
+        /* * 3. SISTEMA DE MONITORIZACIÓN (DEBUG)
+         * Panel informativo flotante en la esquina.
+         */
+        #debug-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(17, 17, 27, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #cba6f7;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .debug-row {
+            margin: 5px 0;
+        }
+        .highlight { color: #a6e3a1; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div class="sensor s-top"    onmouseenter="accionar('up')"></div>
-    <div class="sensor s-bottom" onmouseenter="accionar('down')"></div>
-    <div class="sensor s-left"   onmouseenter="accionar('left')"></div>
-    <div class="sensor s-right"  onmouseenter="accionar('right')"></div>
-    <div class="sensor s-center" onmouseenter="resetReady()"></div>
+    <div id="debug-panel">
+        <div class="debug-row">Posición Puntero: <span id="debug-pos" class="highlight">X: 0px, Y: 0px</span></div>
+        <div class="debug-row">Celda Activa: <span id="debug-cell" class="highlight">Fila 2, Columna 2</span></div>
+        <div class="debug-row">Último Movimiento: <span id="debug-dir" class="highlight">Ninguno (Inicio)</span></div>
+    </div>
 
-    <div class="grid">
-        <div class="caja activo">1</div>
-        <div class="caja">2</div>
-        <div class="caja">3</div>
-        <div class="caja">4</div>
-        <div class="caja">5</div>
-        <div class="caja">6</div>
-        <div class="caja">7</div>
-        <div class="caja">8</div>
-        <div class="caja">9</div>
+    <div id="grid">
+        <div class="cell" id="cell-0-0">1,1</div>
+        <div class="cell" id="cell-0-1">1,2</div>
+        <div class="cell" id="cell-0-2">1,3</div>
+        <div class="cell" id="cell-1-0">2,1</div>
+        <div class="cell" id="cell-1-1">2,2</div>
+        <div class="cell" id="cell-1-2">2,3</div>
+        <div class="cell" id="cell-2-0">3,1</div>
+        <div class="cell" id="cell-2-1">3,2</div>
+        <div class="cell" id="cell-2-2">3,3</div>
     </div>
 
     <script>
-        const celdas = document.querySelectorAll('.caja');
-        let fila = 0;
-        let col = 0;
-        let listoParaMover = true; // Control de "Joystick"
+        // --- EL CEREBRO DEL MOTOR ---
 
-        function refrescarUI() {
-            celdas.forEach(c => c.classList.remove('activo'));
-            const index = (fila * 3) + col;
-            celdas[index].classList.add('activo');
-        }
+        // Variables de estado inicial (Foco en el centro: Fila 1, Col 1 en índice 0)
+        let currentZoneX = 1; 
+        let currentZoneY = 1;
+        let lastDirection = "Ninguno (Inicio)";
 
-        function accionar(direccion) {
-            // Solo movemos si el ratón ha pasado por el centro antes
-            // para evitar que se mueva infinitamente al dejarlo en el borde
-            if (!listoParaMover) return;
+        // Referencias a los elementos del DOM (Interfaz)
+        const debugPos = document.getElementById('debug-pos');
+        const debugCell = document.getElementById('debug-cell');
+        const debugDir = document.getElementById('debug-dir');
 
-            if (direccion === 'up' && fila > 0) fila--;
-            if (direccion === 'down' && fila < 2) fila++;
-            if (direccion === 'left' && col > 0) col--;
-            if (direccion === 'right' && col < 2) col++;
-
-            refrescarUI();
-            listoParaMover = false; // Bloqueamos hasta que vuelva al centro
-        }
-
-        // Esta función se activa cuando el ratón sale del borde y va al centro
-        function resetReady() {
-            listoParaMover = true;
-        }
-        
-        // También permitimos el Enter del mando si llegara a funcionar
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const index = (fila * 3) + col;
-                celdas[index].style.backgroundColor = 'white';
-                setTimeout(() => celdas[index].style.backgroundColor = '', 200);
+        // Función para actualizar visualmente la cuadrícula
+        function updateFocus(x, y) {
+            // Limpiamos la clase 'active' de todas las celdas (Estado Único)
+            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('active'));
+            
+            // Construimos el ID de la celda y le añadimos el foco
+            const targetCell = document.getElementById(`cell-${y}-${x}`);
+            if (targetCell) {
+                targetCell.classList.add('active');
             }
+        }
+
+        // Función para calcular la dirección como un D-Pad
+        function getDirection(oldX, oldY, newX, newY) {
+            let directions = [];
+            
+            if (newY < oldY) directions.push("Arriba");
+            if (newY > oldY) directions.push("Abajo");
+            if (newX < oldX) directions.push("Izquierda");
+            if (newX > oldX) directions.push("Derecha");
+            
+            return directions.join(" y ");
+        }
+
+        // Establecer el foco inicial al cargar (Centro)
+        updateFocus(currentZoneX, currentZoneY);
+
+        // Escuchar el movimiento del ratón en todo el documento
+        document.addEventListener('mousemove', (e) => {
+            // 1. Captura de Datos Silenciosa (Coordenadas en píxeles)
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+
+            // 2. Mapeo de Regiones Virtuales
+            // Dividimos la posición actual entre un tercio de la pantalla
+            const zoneWidth = window.innerWidth / 3;
+            const zoneHeight = window.innerHeight / 3;
+
+            // Calculamos en qué índice (0, 1 o 2) nos encontramos usando Math.floor
+            let newZoneX = Math.floor(mouseX / zoneWidth);
+            let newZoneY = Math.floor(mouseY / zoneHeight);
+
+            // Persistencia: Limitamos los valores entre 0 y 2 para evitar errores en los bordes
+            newZoneX = Math.max(0, Math.min(2, newZoneX));
+            newZoneY = Math.max(0, Math.min(2, newZoneY));
+
+            // 3. Traducción a Movimiento
+            // Solo procesamos si el usuario realmente ha cambiado de zona virtual
+            if (newZoneX !== currentZoneX || newZoneY !== currentZoneY) {
+                lastDirection = getDirection(currentZoneX, currentZoneY, newZoneX, newZoneY);
+                
+                // Actualizamos nuestro estado interno
+                currentZoneX = newZoneX;
+                currentZoneY = newZoneY;
+                
+                // Actualizamos el foco en la interfaz
+                updateFocus(currentZoneX, currentZoneY);
+            }
+
+            // 4. Panel de Monitorización (Debug)
+            debugPos.textContent = `X: ${mouseX}px, Y: ${mouseY}px`;
+            // Sumamos 1 para mostrar al usuario valores de 1 a 3 en lugar de 0 a 2
+            debugCell.textContent = `Fila ${currentZoneY + 1}, Columna ${currentZoneX + 1}`;
+            debugDir.textContent = lastDirection;
         });
     </script>
 </body>
