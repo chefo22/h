@@ -5,174 +5,120 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motor de Navegación por Puntero</title>
     <style>
-        /* * 1. REGLAS DE CONTROL Y VISIBILIDAD 
-         * Ocultamos el cursor en toda la página y evitamos el scroll.
-         */
+        /* 1. Ocultar el puntero en toda la pantalla */
+        * {
+            cursor: none !important;
+            box-sizing: border-box;
+        }
+
+        /* 2. Asegurar que el body ocupe toda la pantalla sin márgenes */
         body {
             margin: 0;
             padding: 0;
             width: 100vw;
             height: 100vh;
-            background-color: #1e1e2e;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden; 
-            cursor: none; /* ¡Invisibilidad total del puntero! */
+            background-color: #1a1a1a;
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden; /* Evitar barras de desplazamiento */
         }
 
-        /* * 2. EL ENTORNO DE PRUEBAS (SANDBOX)
-         * Cuadrícula central de 3 columnas por 3 filas.
-         */
-        #grid {
+        /* 3. La cuadrícula de pruebas (Sandbox) */
+        .cuadricula {
             display: grid;
-            grid-template-columns: repeat(3, 120px);
-            grid-template-rows: repeat(3, 120px);
-            gap: 15px;
+            grid-template-columns: repeat(3, 1fr); /* 3 columnas iguales */
+            grid-template-rows: repeat(3, 1fr);    /* 3 filas iguales */
+            width: 100vw;
+            height: 100vh;
         }
 
-        .cell {
-            background-color: #313244;
-            border: 2px solid #45475a;
-            border-radius: 12px;
+        /* 4. Estilo base para cada celda */
+        .celda {
+            border: 2px solid #333;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #6c7086;
-            transition: all 0.2s ease-in-out;
+            color: #555;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            transition: all 0.2s ease; /* Transición suave al cambiar el foco */
         }
 
-        /* Estado de Foco Único */
-        .cell.active {
-            background-color: #cba6f7;
-            border-color: #b4befe;
-            color: #11111b;
-            box-shadow: 0 0 20px rgba(203, 166, 247, 0.5);
-            transform: scale(1.05);
+        /* 5. Estilo exclusivo para la celda enfocada (Estado de Foco Único) */
+        .celda.enfocada {
+            background-color: #4CAF50; /* Verde brillante */
+            color: white;
+            border-color: #fff;
+            transform: scale(0.95); /* Pequeño efecto visual para indicar selección */
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
         }
-
-        /* * 3. SISTEMA DE MONITORIZACIÓN (DEBUG)
-         * Panel informativo flotante en la esquina.
-         */
-        #debug-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background-color: rgba(17, 17, 27, 0.8);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #cba6f7;
-            font-family: monospace;
-            font-size: 14px;
-        }
-
-        .debug-row {
-            margin: 5px 0;
-        }
-        .highlight { color: #a6e3a1; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="debug-panel">
-        <div class="debug-row">Posición Puntero: <span id="debug-pos" class="highlight">X: 0px, Y: 0px</span></div>
-        <div class="debug-row">Celda Activa: <span id="debug-cell" class="highlight">Fila 2, Columna 2</span></div>
-        <div class="debug-row">Último Movimiento: <span id="debug-dir" class="highlight">Ninguno (Inicio)</span></div>
-    </div>
-
-    <div id="grid">
-        <div class="cell" id="cell-0-0">1,1</div>
-        <div class="cell" id="cell-0-1">1,2</div>
-        <div class="cell" id="cell-0-2">1,3</div>
-        <div class="cell" id="cell-1-0">2,1</div>
-        <div class="cell" id="cell-1-1">2,2</div>
-        <div class="cell" id="cell-1-2">2,3</div>
-        <div class="cell" id="cell-2-0">3,1</div>
-        <div class="cell" id="cell-2-1">3,2</div>
-        <div class="cell" id="cell-2-2">3,3</div>
+    <div class="cuadricula" id="tablero">
+        <div class="celda" id="celda-0">0 (Sup Izq)</div>
+        <div class="celda" id="celda-1">1 (Sup Cen)</div>
+        <div class="celda" id="celda-2">2 (Sup Der)</div>
+        <div class="celda" id="celda-3">3 (Med Izq)</div>
+        <div class="celda" id="celda-4">4 (Centro)</div>
+        <div class="celda" id="celda-5">5 (Med Der)</div>
+        <div class="celda" id="celda-6">6 (Inf Izq)</div>
+        <div class="celda" id="celda-7">7 (Inf Cen)</div>
+        <div class="celda" id="celda-8">8 (Inf Der)</div>
     </div>
 
     <script>
-        // --- EL CEREBRO DEL MOTOR ---
+        // --- MOTOR DE NAVEGACIÓN (EL CEREBRO) ---
 
-        // Variables de estado inicial (Foco en el centro: Fila 1, Col 1 en índice 0)
-        let currentZoneX = 1; 
-        let currentZoneY = 1;
-        let lastDirection = "Ninguno (Inicio)";
+        // Variables para gestionar el estado
+        const celdas = document.querySelectorAll('.celda');
+        let indiceEnfocado = 4; // Foco Inicial obligatorio en el centro (índice 4)
 
-        // Referencias a los elementos del DOM (Interfaz)
-        const debugPos = document.getElementById('debug-pos');
-        const debugCell = document.getElementById('debug-cell');
-        const debugDir = document.getElementById('debug-dir');
-
-        // Función para actualizar visualmente la cuadrícula
-        function updateFocus(x, y) {
-            // Limpiamos la clase 'active' de todas las celdas (Estado Único)
-            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('active'));
+        // Función para aplicar el foco a una celda específica
+        function aplicarFoco(nuevoIndice) {
+            // Regla: Solo una celda enfocada a la vez.
+            // Eliminamos la clase 'enfocada' de la celda actual
+            celdas[indiceEnfocado].classList.remove('enfocada');
             
-            // Construimos el ID de la celda y le añadimos el foco
-            const targetCell = document.getElementById(`cell-${y}-${x}`);
-            if (targetCell) {
-                targetCell.classList.add('active');
-            }
+            // Actualizamos el índice y añadimos la clase a la nueva celda
+            indiceEnfocado = nuevoIndice;
+            celdas[indiceEnfocado].classList.add('enfocada');
+            
+            // Aquí podríamos emitir un evento personalizado indicando la dirección
+            // (por ejemplo: "Se movió a la Flecha Arriba")
+            console.log(`Foco movido a la celda: ${indiceEnfocado}`);
         }
 
-        // Función para calcular la dirección como un D-Pad
-        function getDirection(oldX, oldY, newX, newY) {
-            let directions = [];
+        // Aplicar el foco inicial al cargar la página
+        aplicarFoco(indiceEnfocado);
+
+        // Lógica de Mapeo de Regiones al mover el puntero
+        document.addEventListener('mousemove', (evento) => {
+            // 1. Obtener dimensiones de la pantalla actual
+            const anchoPantalla = window.innerWidth;
+            const altoPantalla = window.innerHeight;
+
+            // 2. Calcular el ancho y alto de cada una de las 3 columnas/filas
+            const anchoZona = anchoPantalla / 3;
+            const altoZona = altoPantalla / 3;
+
+            // 3. Determinar en qué columna (0, 1 o 2) está el puntero
+            // Math.floor redondea hacia abajo. Min() asegura que no exceda el índice 2 en bordes extremos.
+            const columna = Math.min(Math.floor(evento.clientX / anchoZona), 2);
             
-            if (newY < oldY) directions.push("Arriba");
-            if (newY > oldY) directions.push("Abajo");
-            if (newX < oldX) directions.push("Izquierda");
-            if (newX > oldX) directions.push("Derecha");
-            
-            return directions.join(" y ");
-        }
+            // 4. Determinar en qué fila (0, 1 o 2) está el puntero
+            const fila = Math.min(Math.floor(evento.clientY / altoZona), 2);
 
-        // Establecer el foco inicial al cargar (Centro)
-        updateFocus(currentZoneX, currentZoneY);
+            // 5. Calcular el índice unidimensional (0 al 8) basado en la fila y columna
+            // Fórmula: (fila * número de columnas) + columna
+            const nuevoIndice = (fila * 3) + columna;
 
-        // Escuchar el movimiento del ratón en todo el documento
-        document.addEventListener('mousemove', (e) => {
-            // 1. Captura de Datos Silenciosa (Coordenadas en píxeles)
-            const mouseX = e.clientX;
-            const mouseY = e.clientY;
-
-            // 2. Mapeo de Regiones Virtuales
-            // Dividimos la posición actual entre un tercio de la pantalla
-            const zoneWidth = window.innerWidth / 3;
-            const zoneHeight = window.innerHeight / 3;
-
-            // Calculamos en qué índice (0, 1 o 2) nos encontramos usando Math.floor
-            let newZoneX = Math.floor(mouseX / zoneWidth);
-            let newZoneY = Math.floor(mouseY / zoneHeight);
-
-            // Persistencia: Limitamos los valores entre 0 y 2 para evitar errores en los bordes
-            newZoneX = Math.max(0, Math.min(2, newZoneX));
-            newZoneY = Math.max(0, Math.min(2, newZoneY));
-
-            // 3. Traducción a Movimiento
-            // Solo procesamos si el usuario realmente ha cambiado de zona virtual
-            if (newZoneX !== currentZoneX || newZoneY !== currentZoneY) {
-                lastDirection = getDirection(currentZoneX, currentZoneY, newZoneX, newZoneY);
-                
-                // Actualizamos nuestro estado interno
-                currentZoneX = newZoneX;
-                currentZoneY = newZoneY;
-                
-                // Actualizamos el foco en la interfaz
-                updateFocus(currentZoneX, currentZoneY);
+            // 6. Si el puntero ha entrado en una nueva zona, actualizamos el foco
+            if (nuevoIndice !== indiceEnfocado) {
+                aplicarFoco(nuevoIndice);
             }
-
-            // 4. Panel de Monitorización (Debug)
-            debugPos.textContent = `X: ${mouseX}px, Y: ${mouseY}px`;
-            // Sumamos 1 para mostrar al usuario valores de 1 a 3 en lugar de 0 a 2
-            debugCell.textContent = `Fila ${currentZoneY + 1}, Columna ${currentZoneX + 1}`;
-            debugDir.textContent = lastDirection;
         });
     </script>
 </body>
