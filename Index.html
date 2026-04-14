@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor de Navegación por Puntero (Bro TV)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            cursor: none !important; /* Lo mantenemos por si Bro TV lo soporta en futuras versiones */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Pantalla inicial obligatoria para activar el Bloqueo de Puntero */
+        #pantalla-inicio {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.95);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            cursor: pointer;
+        }
+
+        #pantalla-inicio button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        /* Panel de depuración en pantalla */
+        #depurador {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: yellow;
+            padding: 10px;
+            font-family: monospace;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        /* La cuadrícula */
+        .cuadricula {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .celda {
+            border: 2px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #555;
+            font-size: 24px;
+            transition: all 0.2s ease;
+        }
+
+        .celda.enfocada {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #fff;
+            transform: scale(0.95);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="pantalla-inicio">
+        <h2>Motor de Navegación</h2>
+        <p>Mueve el puntero aquí y pulsa "OK" en el mando para ocultar el cursor e iniciar.</p>
+        <button id="btn-iniciar">Iniciar Entorno</button>
+    </div>
+
+    <div id="depurador">Estado: Esperando inicio...</div>
+
+    <div class="cuadricula" id="tablero">
+        <div class="celda" id="celda-0">0 (Sup Izq)</div>
+        <div class="celda" id="celda-1">1 (Sup Cen)</div>
+        <div class="celda" id="celda-2">2 (Sup Der)</div>
+        <div class="celda" id="celda-3">3 (Med Izq)</div>
+        <div class="celda" id="celda-4">4 (Centro)</div>
+        <div class="celda" id="celda-5">5 (Med Der)</div>
+        <div class="celda" id="celda-6">6 (Inf Izq)</div>
+        <div class="celda" id="celda-7">7 (Inf Cen)</div>
+        <div class="celda" id="celda-8">8 (Inf Der)</div>
+    </div>
+
+    <script>
+        const celdas = document.querySelectorAll('.celda');
+        const pantallaInicio = document.getElementById('pantalla-inicio');
+        const btnIniciar = document.getElementById('btn-iniciar');
+        const depurador = document.getElementById('depurador');
+
+        let indiceEnfocado = 4; // Empezamos en el centro
+        
+        // Coordenadas virtuales de nuestro puntero invisible
+        let virtualX = window.innerWidth / 2;
+        let virtualY = window.innerHeight / 2;
+
+        // Sensibilidad del puntero (ajústalo si se mueve muy rápido o muy lento)
+        const sensibilidad = 2.0; 
+
+        function aplicarFoco(nuevoIndice) {
+            if (indiceEnfocado === nuevoIndice) return; // Si es el mismo, no hacemos nada
+            
+            celdas[indiceEnfocado].classList.remove('enfocada');
+            indiceEnfocado = nuevoIndice;
+            celdas[indiceEnfocado].classList.add('enfocada');
+            
+            depurador.innerText = `Foco actual: Celda ${indiceEnfocado}`;
+        }
+
+        // Aplicar foco inicial
+        celdas[indiceEnfocado].classList.add('enfocada');
+
+        // Paso 1: Pedir el bloqueo del puntero al pulsar el botón
+        btnIniciar.addEventListener('click', async () => {
+            try {
+                await document.body.requestPointerLock();
+                pantallaInicio.style.display = 'none';
+                depurador.innerText = "¡Puntero bloqueado! Mueve las flechas.";
+            } catch (error) {
+                depurador.innerText = "Error: Bro TV no soporta Pointer Lock.";
+            }
+        });
+
+        // Paso 2: Escuchar los cambios (por si el usuario sale del modo presionando "Atrás")
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                pantallaInicio.style.display = 'none';
+            } else {
+                pantallaInicio.style.display = 'flex'; // Volver a mostrar si se pierde el bloqueo
+                depurador.innerText = "Bloqueo perdido. Pulsa Iniciar de nuevo.";
+            }
+        });
+
+        // Paso 3: Leer el movimiento "crudo" del ratón
+        document.addEventListener('mousemove', (evento) => {
+            // Solo procesamos si el puntero está bloqueado de forma nativa
+            if (document.pointerLockElement === document.body) {
+                
+                // movementX/Y nos dice cuántos píxeles se movió el mando
+                const movX = evento.movementX || 0;
+                const movY = evento.movementY || 0;
+
+                // Actualizamos nuestra posición virtual
+                virtualX += movX * sensibilidad;
+                virtualY += movY * sensibilidad;
+
+                // Evitamos que el puntero virtual se salga de la pantalla
+                virtualX = Math.max(0, Math.min(virtualX, window.innerWidth));
+                virtualY = Math.max(0, Math.min(virtualY, window.innerHeight));
+
+                // Calculamos las zonas igual que antes, pero usando nuestras coordenadas virtuales
+                const anchoZona = window.innerWidth / 3;
+                const altoZona = window.innerHeight / 3;
+
+                const columna = Math.min(Math.floor(virtualX / anchoZona), 2);
+                const fila = Math.min(Math.floor(virtualY / altoZona), 2);
+
+                const nuevoIndice = (fila * 3) + columna;
+
+                aplicarFoco(nuevoIndice);
+            }
+        });
+    </script>
+</body>
+</html>
