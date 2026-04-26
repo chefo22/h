@@ -2,23 +2,31 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor Champions IA - V10</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.6">
+    <title>Gestor Champions IA - V11</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap');
 
         body { font-family: 'Nunito', sans-serif; background-color: #fcf8eb; background-image: radial-gradient(#e0d6b8 1px, transparent 1px); background-size: 20px 20px; max-width: 900px; margin: 20px auto; padding: 20px; color: #333; }
         h1 { text-align: center; color: #4a4a8a; font-size: 2.5em; text-transform: uppercase; letter-spacing: 2px; text-shadow: 2px 2px 0px #fff; }
         
-        .card { background: rgba(255, 255, 255, 0.9); padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.05); margin-bottom: 25px; border: 2px solid #e8dfc8; }
-        .step-title { font-weight: 800; color: #e65555; margin-bottom: 10px; font-size: 1.3em; display: flex; align-items: center; gap: 10px; }
+        /* Panel de Importación */
+        .import-panel { background: rgba(255, 255, 255, 0.95); padding: 25px; border-radius: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); margin-bottom: 30px; border: 2px solid #e8dfc8; display: none; }
+        .show-panel { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px dashed #ccc; padding-bottom: 10px; }
+        .panel-title { font-weight: 800; color: #333; font-size: 1.2em; }
         
+        .btn-small-copy { padding: 8px 15px; font-size: 0.85em; width: auto; background: #e0d6b8; color: #4a4a8a; border-radius: 10px; border: 1px solid #d0c6a8; cursor: pointer; }
+        .btn-small-copy:hover { background: #d0c6a8; }
+        .btn-cancel { background: #ff4d4d; color: white; padding: 8px 15px; border-radius: 10px; border: none; cursor: pointer; font-size: 0.85em;}
+
         button { padding: 15px; border: none; border-radius: 50px; cursor: pointer; font-weight: 800; font-size: 16px; width: 100%; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
-        .btn-copy { background: linear-gradient(135deg, #4da6ff, #0066cc); color: white; margin-bottom: 15px; }
-        .btn-save { background: linear-gradient(135deg, #5cd65c, #2eb82e); color: white; }
+        .btn-save { background: linear-gradient(135deg, #5cd65c, #2eb82e); color: white; margin-top: 15px;}
         
-        textarea, input[type="text"] { width: 100%; padding: 15px; border: 2px solid #dcdcdc; border-radius: 12px; font-family: monospace; font-size: 15px; box-sizing: border-box; background: #fdfdfd; transition: border-color 0.3s; }
+        textarea, input[type="text"] { width: 100%; padding: 15px; margin-bottom: 10px; border: 2px solid #dcdcdc; border-radius: 12px; font-family: monospace; font-size: 15px; box-sizing: border-box; background: #fdfdfd; transition: border-color 0.3s; }
         textarea:focus, input[type="text"]:focus { border-color: #6a5acd; outline: none; }
         textarea { height: 120px; resize: vertical; }
         
@@ -30,59 +38,69 @@
 
         .pokemon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
         .poke-card { background: linear-gradient(160deg, #817bc9 0%, #615cbd 100%); color: white; border: 2px solid #9c97e0; border-radius: 20px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
-        
         .poke-header { display: flex; align-items: center; gap: 15px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; margin-bottom: 10px; }
         .poke-header img { width: 60px; height: 60px; background: rgba(255,255,255,0.2); border-radius: 50%; padding: 5px; }
         .poke-name { font-weight: 800; font-size: 1.4em; text-transform: capitalize; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
-        
         .poke-details p { margin: 6px 0; font-size: 0.9em; display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.1); padding: 6px 8px; border-radius: 6px; }
         .poke-details strong { color: #f0e68c; }
-        
         .item-wrapper { display: flex; align-items: center; gap: 5px; }
         .item-icon { width: 24px; height: 24px; image-rendering: pixelated; }
 
         .moves-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px; }
         .move-pill { padding: 4px 6px; border-radius: 6px; font-size: 0.8em; font-weight: bold; text-align: center; text-shadow: 1px 1px 1px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white;}
 
-        /* Colores exactos de los tipos de Pokémon */
-        .type-normal { background-color: #A8A878; } .type-fire { background-color: #F08030; }
-        .type-water { background-color: #6890F0; } .type-electric { background-color: #F8D030; }
-        .type-grass { background-color: #78C850; } .type-ice { background-color: #98D8D8; }
-        .type-fighting { background-color: #C03028; } .type-poison { background-color: #A040A0; }
-        .type-ground { background-color: #E0C068; } .type-flying { background-color: #A890F0; }
-        .type-psychic { background-color: #F85888; } .type-bug { background-color: #A8B820; }
-        .type-rock { background-color: #B8A038; } .type-ghost { background-color: #705898; }
-        .type-dragon { background-color: #7038F8; } .type-dark { background-color: #705848; }
-        .type-steel { background-color: #B8B8D0; } .type-fairy { background-color: #EE99AC; }
-        .type-unknown { background-color: #68A090; }
+        .type-normal { background-color: #A8A878; } .type-fire { background-color: #F08030; } .type-water { background-color: #6890F0; } .type-electric { background-color: #F8D030; } .type-grass { background-color: #78C850; } .type-ice { background-color: #98D8D8; } .type-fighting { background-color: #C03028; } .type-poison { background-color: #A040A0; } .type-ground { background-color: #E0C068; } .type-flying { background-color: #A890F0; } .type-psychic { background-color: #F85888; } .type-bug { background-color: #A8B820; } .type-rock { background-color: #B8A038; } .type-ghost { background-color: #705898; } .type-dragon { background-color: #7038F8; } .type-dark { background-color: #705848; } .type-steel { background-color: #B8B8D0; } .type-fairy { background-color: #EE99AC; } .type-unknown { background-color: #68A090; }
 
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; font-size: 0.85em; font-weight: 700; }
         .stat-item { background: rgba(255, 255, 255, 0.15); padding: 4px 8px; border-radius: 12px; display: flex; justify-content: space-between; }
         .stat-value { color: #fff; text-shadow: 1px 1px 1px rgba(0,0,0,0.5); }
+        
+        .pagination-controls { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border: 2px solid #e8dfc8; }
+        .nav-btn { width: auto !important; padding: 10px 20px !important; background: #6a5acd !important; color: white; border-radius: 15px !important; font-size: 0.9em !important; }
+        .nav-btn:disabled { background: #ccc !important; cursor: not-allowed; }
+        .page-info { font-weight: 800; color: #4a4a8a; font-size: 1.1em; }
+        
+        .team-index-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; transition: all 0.3s ease; }
+        .team-index-grid.single-line { display: flex; flex-wrap: nowrap; overflow-x: auto; padding: 10px 5px; gap: 12px; scroll-behavior: smooth; }
+        .team-index-grid.single-line .index-card { flex: 0 0 180px; min-width: 180px; height: 185px; margin-bottom: 5px; }
+        .team-index-grid.single-line::-webkit-scrollbar { height: 6px; }
+        .team-index-grid.single-line::-webkit-scrollbar-thumb { background: #6a5acd; border-radius: 10px; }
+        .team-index-grid.single-line::-webkit-scrollbar-track { background: #f0edff; border-radius: 10px; }
+        .index-card { background: white; padding: 10px; border-radius: 15px; border: 2px solid #e8dfc8; cursor: pointer; transition: all 0.2s; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; width: 180px; height: 185px; box-sizing: border-box; }
+        .index-card:hover { transform: translateY(-3px); border-color: #6a5acd; box-shadow: 0 6px 12px rgba(106, 90, 205, 0.15); }
+        .index-card.active { border-color: #6a5acd; background: #f0edff; box-shadow: inset 0 0 10px rgba(106, 90, 205, 0.1); }
+        .index-name { font-weight: 800; color: #4a4a8a; margin-bottom: 12px; font-size: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; min-height: 1.2em; }
+        .index-imgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; justify-items: center; width: 100%; }
+        .index-imgs img { width: 42px; height: 42px; background: #f9f9f9; border-radius: 50%; border: 1px solid #eee; padding: 2px; object-fit: contain; }
+        
+        /* Nueva clase para el botón en el grid */
+        .add-card { border: 2px dashed #6a5acd !important; background: #fdfdfd; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 180px !important; height: 185px !important; box-sizing: border-box; }
+        .add-card:hover { background: #f0edff; }
     </style>
 </head>
 <body>
 
-    <h1>Gestor de Equipos V10</h1>
+    <h1>Gestor de Equipos</h1>
 
-    <div class="card">
-        <div class="step-title"><span>1️⃣</span> Extraer Datos con IA</div>
-        <button onclick="copyPrompt()" class="btn-copy">Copiar Instrucciones (API Moves)</button>
-    </div>
-
-    <div class="card">
-        <div class="step-title"><span>2️⃣</span> Guardar en tu Colección</div>
+    <div id="importPanel" class="import-panel">
+        <div class="panel-header">
+            <span class="panel-title">Nuevo Equipo</span>
+            <div>
+                <button onclick="copyPrompt()" class="btn-small-copy">📋 Prompt</button>
+                <button onclick="toggleImportPanel()" class="btn-cancel">✖</button>
+            </div>
+        </div>
+        
         <input type="text" id="teamName" placeholder="Nombre del Equipo (Ej: Lluvia Ofensiva)">
-        <br><br>
-        <textarea id="jsonInput" placeholder='Pega aquí el código JSON que te dio la IA...'></textarea>
-        <br><br>
+        <textarea id="jsonInput" placeholder='Pega aquí el código JSON (Si no usas IA, pégalo directamente)...'></textarea>
+        
         <button onclick="processAndSave()" class="btn-save">Registrar y Descargar Datos</button>
     </div>
 
+    <div id="teamIndex" class="team-index-grid"></div>
     <div id="teamsContainer"></div>
 
     <script>
-        // PROMPT ACTUALIZADO: Pide el "id" del movimiento para consultarlo en la PokéAPI
         const aiPrompt = `Actúa como un extractor de datos de Pokémon. 
 Te enviaré dos fotos de un equipo.
 Extrae todos los datos y devuélvelos ESTRICTAMENTE en este formato JSON, sin texto adicional.
@@ -106,14 +124,18 @@ Extrae todos los datos y devuélvelos ESTRICTAMENTE en este formato JSON, sin te
     }
   ]
 }
-IMPORTANTE: 
-1. "name" (del pokemon), "item_id" y el "id" de los ataques (moves) deben estar en inglés, minúsculas y con guiones en lugar de espacios. Si no tiene objeto pon null.`;
+IMPORTANTE: "name" (del pokemon), "item_id" y el "id" de los ataques (moves) deben estar en inglés, minúsculas y con guiones en lugar de espacios. Si no tiene objeto pon null.`;
+
+        function toggleImportPanel() {
+            const panel = document.getElementById('importPanel');
+            panel.classList.toggle('show-panel');
+        }
 
         function copyPrompt() {
             navigator.clipboard.writeText(aiPrompt).then(() => {
-                alert("¡Copiado! Pega esto en tu IA junto con las fotos.");
+                alert("¡Prompt copiado al portapapeles!");
             }).catch(err => {
-                alert("Error al copiar. Por favor, selecciona el texto manualmente.");
+                alert("Error al copiar.");
             });
         }
 
@@ -121,7 +143,7 @@ IMPORTANTE:
             let jsonText = document.getElementById('jsonInput').value;
             let teamName = document.getElementById('teamName').value || "Equipo Nuevo";
             
-            if(!jsonText) return alert("Pega el resultado de la IA primero.");
+            if(!jsonText) return alert("Pega el código JSON primero.");
             jsonText = jsonText.replace(/```json/gi, '').replace(/```/gi, '').trim();
 
             try {
@@ -132,11 +154,8 @@ IMPORTANTE:
                 btn.innerText = "Consultando PokéAPI..."; 
                 btn.disabled = true;
 
-                // Recorremos cada Pokémon del equipo
                 for(let i = 0; i < teamData.pokemon.length; i++) {
                     let p = teamData.pokemon[i];
-                    
-                    // 1. Obtener imagen del Pokémon
                     try {
                         const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.name.toLowerCase()}`);
                         if(res.ok) {
@@ -145,7 +164,6 @@ IMPORTANTE:
                         }
                     } catch(e) { p.image = ""; }
 
-                    // 2. NUEVO: Obtener el TIPO de cada movimiento desde la API
                     if(p.moves && Array.isArray(p.moves)) {
                         for(let j = 0; j < p.moves.length; j++) {
                             let m = p.moves[j];
@@ -154,107 +172,146 @@ IMPORTANTE:
                                     const moveRes = await fetch(`https://pokeapi.co/api/v2/move/${m.id.toLowerCase()}`);
                                     if(moveRes.ok) {
                                         const moveData = await moveRes.json();
-                                        m.type = moveData.type.name; // Ej: "fire", "water"
-                                    } else {
-                                        m.type = "unknown";
-                                    }
+                                        m.type = moveData.type.name; 
+                                    } else { m.type = "unknown"; }
                                 } catch(e) { m.type = "unknown"; }
-                            } else {
-                                m.type = "unknown";
-                            }
+                            } else { m.type = "unknown"; }
                         }
                     }
                 }
 
-                // Guardamos los datos localmente
                 const savedData = localStorage.getItem('teamCodesChampionsIA');
                 const teams = savedData ? JSON.parse(savedData) : [];
 
                 teams.push({ name: teamName, id: teamData.team_id, roster: teamData.pokemon });
                 localStorage.setItem('teamCodesChampionsIA', JSON.stringify(teams));
 
-                // Limpiar campos
                 document.getElementById('jsonInput').value = '';
                 document.getElementById('teamName').value = '';
                 btn.innerText = "Registrar y Descargar Datos"; 
                 btn.disabled = false;
                 
+                toggleImportPanel(); 
                 loadTeams();
 
             } catch(error) {
-                alert("Hubo un error. Verifica que pegaste el JSON correctamente.\nDetalle: " + error.message);
+                alert("Hubo un error. Verifica el JSON.\nDetalle: " + error.message);
                 const btn = document.querySelector('.btn-save');
                 btn.innerText = "Registrar y Descargar Datos"; 
                 btn.disabled = false;
             }
+        }        let currentTeamIndex = null;        function renderTeamIndex(teams) {
+            const indexContainer = document.getElementById('teamIndex');
+            
+            if (currentTeamIndex !== null) {
+                indexContainer.classList.add('single-line');
+            } else {
+                indexContainer.classList.remove('single-line');
+            }
+
+            // Generar tarjetas de equipos
+            let html = teams.map((team, idx) => `
+                <div class="index-card ${idx === currentTeamIndex ? 'active' : ''}" onclick="selectTeam(${idx})">
+                    <div class="index-name">${team.name}</div>
+                    <div class="index-imgs">
+                        ${team.roster.map(p => `<img src="${p.image || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'}" title="${p.name}">`).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // Añadir tarjeta para importar
+            html += `
+                <div class="index-card add-card" onclick="toggleImportPanel()">
+                    <div class="index-name" style="color: #6a5acd; font-size: 1.2em;">➕</div>
+                    <div class="index-name" style="font-size: 0.7em;">Añadir</div>
+                </div>
+            `;
+            
+            indexContainer.innerHTML = html;
         }
 
-        function loadTeams() {
+        function selectTeam(index) {
+            currentTeamIndex = index;
+            loadTeams();
+        }        function loadTeams() {
             const savedData = localStorage.getItem('teamCodesChampionsIA');
             const teams = savedData ? JSON.parse(savedData) : [];
             const container = document.getElementById('teamsContainer');
             container.innerHTML = ''; 
 
-            teams.forEach((team, index) => {
-                let pokemonHTML = team.roster.map(poke => {
-                    
-                    let itemIconHtml = '';
-                    if(poke.item_id && poke.item_id !== "null") {
-                        itemIconHtml = `<img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${poke.item_id}.png" class="item-icon" alt="item">`;
-                    }
+            renderTeamIndex(teams);
 
-                    // Renderizamos los movimientos con los colores que descargó la API
-                    let movesHTML = '';
-                    if(poke.moves && Array.isArray(poke.moves)) {
-                        poke.moves.forEach(move => {
-                            const moveType = move.type ? move.type.toLowerCase() : 'unknown';
-                            movesHTML += `<div class="move-pill type-${moveType}">${move.name}</div>`;
-                        });
-                    }
+            // Si no hay equipos o no se ha seleccionado ninguno todavía, dejamos el contenedor vacío
+            if (teams.length === 0 || currentTeamIndex === null) {
+                return;
+            }
 
-                    return `
-                    <div class="poke-card">
-                        <div class="poke-header">
-                            <img src="${poke.image || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'}" alt="${poke.name}">
-                            <div class="poke-name">${poke.name}</div>
-                        </div>
-                        <div class="poke-details">
-                            <p><strong>Objeto:</strong> <span class="item-wrapper">${itemIconHtml} ${poke.item || 'Ninguno'}</span></p>
-                            <p><strong>Hab:</strong> <span>${poke.ability || 'Desconocida'}</span></p>
-                            <p><strong>Tera:</strong> <span>${poke.tera_type || '?'}</span></p>
-                            
-                            <div class="moves-container">
-                                ${movesHTML}
-                            </div>
-                            
-                            <div class="stats-grid">
-                                <div class="stat-item">PS <span class="stat-value">${poke.stats?.hp || 0}</span></div>
-                                <div class="stat-item">Atq <span class="stat-value">${poke.stats?.atk || 0}</span></div>
-                                <div class="stat-item">Def <span class="stat-value">${poke.stats?.def || 0}</span></div>
-                                <div class="stat-item">AtEsp <span class="stat-value">${poke.stats?.spa || 0}</span></div>
-                                <div class="stat-item">DfEsp <span class="stat-value">${poke.stats?.spd || 0}</span></div>
-                                <div class="stat-item">Vel <span class="stat-value">${poke.stats?.spe || 0}</span></div>
-                            </div>
+            if (currentTeamIndex >= teams.length) currentTeamIndex = Math.max(0, teams.length - 1);
+
+            const team = teams[currentTeamIndex];
+            let pokemonHTML = team.roster.map(poke => {
+                let itemIconHtml = '';
+                if(poke.item_id && poke.item_id !== "null") {
+                    itemIconHtml = `<img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${poke.item_id}.png" class="item-icon" alt="item">`;
+                }
+
+                let movesHTML = '';
+                if(poke.moves && Array.isArray(poke.moves)) {
+                    poke.moves.forEach(move => {
+                        const moveType = move.type ? move.type.toLowerCase() : 'unknown';
+                        movesHTML += `<div class="move-pill type-${moveType}">${move.name}</div>`;
+                    });
+                }
+
+                return `
+                <div class="poke-card">
+                    <div class="poke-header">
+                        <img src="${poke.image || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'}" alt="${poke.name}">
+                        <div class="poke-name">${poke.name}</div>
+                    </div>
+                    <div class="poke-details">
+                        <p><strong>Objeto:</strong> <span class="item-wrapper">${itemIconHtml} ${poke.item || 'Ninguno'}</span></p>
+                        <p><strong>Hab:</strong> <span>${poke.ability || 'Desconocida'}</span></p>
+                        <p><strong>Tera:</strong> <span>${poke.tera_type || '?'}</span></p>
+                        <div class="moves-container">${movesHTML}</div>
+                        <div class="stats-grid">
+                            <div class="stat-item">PS <span class="stat-value">${poke.stats?.hp || 0}</span></div>
+                            <div class="stat-item">Atq <span class="stat-value">${poke.stats?.atk || 0}</span></div>
+                            <div class="stat-item">Def <span class="stat-value">${poke.stats?.def || 0}</span></div>
+                            <div class="stat-item">AtEsp <span class="stat-value">${poke.stats?.spa || 0}</span></div>
+                            <div class="stat-item">DfEsp <span class="stat-value">${poke.stats?.spd || 0}</span></div>
+                            <div class="stat-item">Vel <span class="stat-value">${poke.stats?.spe || 0}</span></div>
                         </div>
                     </div>
-                `}).join('');
+                </div>`;
+            }).join('');
 
-                container.innerHTML += `
-                    <div class="team-box">
-                        <div class="team-header">
-                            <div>
-                                <div class="team-title">${team.name}</div>
-                                <span class="team-code">${team.id}</span>
-                            </div>
-                            <button class="delete-btn" onclick="deleteTeam(${index})">Eliminar</button>
+            container.innerHTML = `
+                <div class="pagination-controls">
+                    <button class="nav-btn" onclick="changeTeam(-1)" ${currentTeamIndex === 0 ? 'disabled' : ''}>◀ Anterior</button>
+                    <span class="page-info">Equipo ${currentTeamIndex + 1} de ${teams.length}</span>
+                    <button class="nav-btn" onclick="changeTeam(1)" ${currentTeamIndex === teams.length - 1 ? 'disabled' : ''}>Siguiente ▶</button>
+                </div>
+                <div class="team-box">
+                    <div class="team-header">
+                        <div>
+                            <div class="team-title">${team.name}</div>
+                            <span class="team-code">${team.id}</span>
                         </div>
-                        <div class="pokemon-grid">${pokemonHTML}</div>
+                        <button class="delete-btn" onclick="deleteTeam(${currentTeamIndex})">Eliminar</button>
                     </div>
-                `;
-            });
+                    <div class="pokemon-grid">${pokemonHTML}</div>
+                </div>
+            `;
+        }
+
+        function changeTeam(delta) {
+            currentTeamIndex += delta;
+            loadTeams();
         }
 
         function deleteTeam(index) {
+            if(!confirm("¿Seguro que quieres eliminar este equipo?")) return;
             const savedData = localStorage.getItem('teamCodesChampionsIA');
             let teams = JSON.parse(savedData);
             teams.splice(index, 1);
