@@ -3,91 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Piece Source Viewer - Final</title>
+    <title>One Piece Source: Final Bypass</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --success: #238636; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin: 0; }
-        .container { max-width: 700px; margin: auto; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin: 0; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 700px; margin: auto; }
         h1 { color: var(--accent); font-size: 1.2rem; text-align: center; margin-bottom: 20px; }
         
         button { 
             width: 100%; padding: 16px; background-color: var(--success); color: white; border: none; 
             border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem;
         }
-        button:disabled { background-color: #21262d; color: #484f58; }
+        button:disabled { background-color: #21262d; color: #484f58; cursor: not-allowed; }
 
-        #status { text-align: center; margin: 15px 0; font-size: 0.85rem; color: #d29922; }
+        #status { text-align: center; margin: 15px 0; font-family: monospace; color: #d29922; font-size: 0.85rem; }
         
         pre { 
-            background: #010409; padding: 15px; border-radius: 8px; overflow-x: auto; 
-            font-size: 11px; color: #79c0ff; border: 1px solid #30363d; max-height: 450px;
-            white-space: pre-wrap; font-family: monospace;
+            background: #010409; padding: 15px; border-radius: 6px; overflow-x: auto; 
+            font-size: 12px; color: #79c0ff; border: 1px solid #30363d; max-height: 500px;
+            white-space: pre-wrap; line-height: 1.5; font-family: monospace;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card">
-        <h1>Source Viewer: One Piece</h1>
-        <button id="btn" onclick="masterFetch()">🚀 Forzar Extracción de Código</button>
-        <div id="status">Esperando inicio...</div>
-        <pre id="output">El código aparecerá aquí...</pre>
-    </div>
+<div class="card">
+    <h1>Source Viewer: One Piece</h1>
+    <button id="btn" onclick="runBypass()">🚀 Forzar Lectura (Modo Infiltrado)</button>
+    <div id="status">Esperando conexión...</div>
+    <pre id="output">El código aparecerá aquí...</pre>
 </div>
 
 <script>
-    const targetUrl = 'https://kurigames.com/one-piece-card-game/';
+    // FUNCIÓN DE RETORNO (CALLBACK)
+    // El servidor llamará a esta función directamente, saltándose el bloqueo de "Fetch"
+    window.renderResponse = function(data) {
+        const out = document.getElementById('output');
+        const stat = document.getElementById('status');
+        const btn = document.getElementById('btn');
 
-    async function masterFetch() {
+        if (data && data.contents) {
+            out.textContent = data.contents;
+            stat.innerHTML = "<span style='color:#3fb950'>✅ ¡ÉXITO! Código fuente extraído correctamente.</span>";
+        } else {
+            stat.innerHTML = "<span style='color:#f85149'>❌ El servidor respondió, pero el código está vacío.</span>";
+        }
+        btn.disabled = false;
+        
+        // Limpiamos el rastro
+        const oldScript = document.getElementById('bypass-script');
+        if (oldScript) oldScript.remove();
+    };
+
+    function runBypass() {
         const btn = document.getElementById('btn');
         const out = document.getElementById('output');
-        const status = document.getElementById('status');
+        const stat = document.getElementById('status');
+        const target = 'https://kurigames.com/one-piece-card-game/';
 
         btn.disabled = true;
-        out.textContent = "Probando múltiples rutas de conexión...";
+        stat.innerHTML = "⚡ Iniciando inyección JSONP (Bypass de Red)...";
+        out.textContent = "Solicitando datos de forma indirecta...";
 
-        // Intentaremos 3 métodos diferentes en orden de eficacia
-        const proxies = [
-            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-            `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
-            `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
-        ];
-
-        let success = false;
-
-        for (let i = 0; i < proxies.length; i++) {
-            status.innerHTML = `⚡ Intentando ruta ${i + 1} de ${proxies.length}...`;
-            try {
-                const response = await fetch(proxies[i]);
-                if (!response.ok) throw new Error();
-                
-                let data = await response.text();
-                
-                // Si es el proxy de AllOrigins, viene en formato JSON
-                if (data.startsWith('{"contents":')) {
-                    const json = JSON.parse(data);
-                    data = json.contents;
-                }
-
-                if (data && data.length > 500) {
-                    out.textContent = data;
-                    status.innerHTML = "<span style='color:#3fb950'>✅ ¡CONSEGUIDO! Código extraído.</span>";
-                    success = true;
-                    break; // Si uno funciona, paramos
-                }
-            } catch (e) {
-                console.log(`Ruta ${i+1} falló`);
-            }
-        }
-
-        if (!success) {
-            status.innerHTML = "<span style='color:#f85149'>❌ Todas las rutas fallaron en Brave.</span>";
-            out.textContent = "CAUSA POSIBLE:\nTu conexión o navegador bloquea los servicios de ayuda.\n\nPRUEBA ESTO:\n1. Abre esta web en una PESTAÑA DE INCÓGNITO en Brave.\n2. Si estás usando una VPN o AdGuard, desactívalo un momento.";
-        }
+        // CREAMOS UNA ETIQUETA SCRIPT DINÁMICA
+        // Brave permite cargar scripts externos mucho más fácil que hacer un 'fetch'
+        const script = document.createElement('script');
+        script.id = 'bypass-script';
         
-        btn.disabled = false;
+        // Usamos el proxy en modo "Callback"
+        // Esto le dice al servidor: "No me mandes un JSON, mándame una función de JS"
+        script.src = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&callback=renderResponse&t=${Date.now()}`;
+        
+        script.onerror = function() {
+            stat.innerHTML = "<span style='color:#f85149'>❌ Brave bloqueó incluso la inyección de script.</span>";
+            out.textContent = "ESTADO: BLOQUEO TOTAL.\n\n" +
+                             "ÚLTIMA OPCIÓN:\n" +
+                             "1. Pulsa el León de Brave.\n" +
+                             "2. Pulsa en 'Configuración avanzada de escudos'.\n" +
+                             "3. Cambia 'Bloquear rastreadores' a 'Desactivado'.";
+            btn.disabled = false;
+        };
+
+        document.body.appendChild(script);
     }
 </script>
 
