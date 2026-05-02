@@ -3,22 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Piece Source Viewer (GitHub Edition)</title>
+    <title>One Piece Source Viewer</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --success: #238636; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
         .container { max-width: 800px; margin: auto; }
-        .header { text-align: center; margin-bottom: 30px; }
-        h1 { color: var(--accent); font-size: 1.5rem; }
-        
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        h1 { color: var(--accent); font-size: 1.4rem; text-align: center; margin-bottom: 20px; }
         
         button { 
             width: 100%; padding: 16px; background-color: var(--success); color: white; border: none; 
-            border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.3s;
+            border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        button:hover { background-color: #2ea043; }
-        button:disabled { background-color: #21262d; color: #484f58; }
+        button:active { transform: scale(0.98); }
 
         #status { text-align: center; margin: 15px 0; font-family: monospace; color: #d29922; }
         
@@ -32,49 +29,60 @@
 <body>
 
 <div class="container">
-    <div class="header">
-        <h1>Source Viewer: One Piece</h1>
-        <p>Extrayendo de: kurigames.com</p>
-    </div>
-
     <div class="card">
-        <button id="btn" onclick="fetchSource()">🚀 Obtener Código Fuente</button>
-        <div id="status">Listo para conectar</div>
-        <pre id="output">El código aparecerá aquí...</pre>
+        <h1>Source Viewer: One Piece</h1>
+        <button id="btn" onclick="fetchWithBypass()">🚀 Obtener Código Fuente</button>
+        <div id="status">Esperando acción...</div>
+        <pre id="output">El código validado aparecerá aquí...</pre>
     </div>
 </div>
 
 <script>
-    async function fetchSource() {
+    // Esta función recibe los datos del proxy de forma "mágica" para el navegador
+    window.handleResponse = function(data) {
+        const out = document.getElementById('output');
+        const stat = document.getElementById('status');
+        
+        if (data && data.contents) {
+            out.textContent = data.contents;
+            stat.innerHTML = "<span style='color:#3fb950'>✅ ¡Éxito! Código obtenido.</span>";
+        } else {
+            stat.innerHTML = "<span style='color:#f85149'>❌ El servidor no devolvió datos.</span>";
+        }
+        
+        document.getElementById('btn').disabled = false;
+        // Limpieza
+        const oldScript = document.getElementById('proxy-script');
+        if (oldScript) oldScript.remove();
+    };
+
+    function fetchWithBypass() {
         const btn = document.getElementById('btn');
         const out = document.getElementById('output');
         const status = document.getElementById('status');
         const target = 'https://kurigames.com/one-piece-card-game/';
-        
-        btn.disabled = true;
-        status.innerText = "⚡ Conectando a través de Proxy Seguro...";
-        out.textContent = "Cargando datos...";
 
-        try {
-            // Usamos AllOrigins, que funciona perfectamente desde dominios https (como GitHub)
-            const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
-            
-            if (!response.ok) throw new Error("Error en la red");
-            
-            const data = await response.json();
-            
-            if (data.contents) {
-                out.textContent = data.contents;
-                status.innerHTML = "<span style='color:#3fb950'>✅ ¡Código obtenido con éxito!</span>";
-            } else {
-                throw new Error("Contenido vacío");
-            }
-        } catch (error) {
-            status.innerHTML = "<span style='color:#f85149'>❌ Error al obtener datos</span>";
-            out.textContent = "Error: " + error.message;
-        } finally {
+        btn.disabled = true;
+        status.innerText = "⚡ Bypass activado: Inyectando Script...";
+        out.textContent = "Solicitando datos de kurigames.com...";
+
+        // Creamos un elemento SCRIPT para saltarnos el bloqueo de FETCH de Brave
+        const script = document.createElement('script');
+        script.id = 'proxy-script';
+        // Usamos JSONP (callback) para que Brave crea que es una librería JS normal
+        script.src = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&callback=handleResponse`;
+        
+        script.onerror = function() {
+            status.innerHTML = "<span style='color:#f85149'>❌ Bloqueo persistente de Brave</span>";
+            out.textContent = "Brave Shields sigue bloqueando la petición.\n\n" +
+                             "POR FAVOR:\n" +
+                             "1. Pulsa el icono del LEÓN en la barra de direcciones.\n" +
+                             "2. Desactiva los escudos para esta web.\n" +
+                             "3. ¡Funcionará al instante!";
             btn.disabled = false;
-        }
+        };
+
+        document.body.appendChild(script);
     }
 </script>
 
