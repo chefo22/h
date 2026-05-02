@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>One Piece Source Viewer</title>
+    <title>One Piece Source Viewer - Final</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --success: #238636; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
-        .container { max-width: 800px; margin: auto; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin: 0; }
+        .container { max-width: 700px; margin: auto; }
         .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-        h1 { color: var(--accent); font-size: 1.4rem; text-align: center; margin-bottom: 20px; }
+        h1 { color: var(--accent); font-size: 1.2rem; text-align: center; margin-bottom: 20px; }
         
         button { 
             width: 100%; padding: 16px; background-color: var(--success); color: white; border: none; 
-            border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s;
+            border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem;
         }
-        button:active { transform: scale(0.98); }
+        button:disabled { background-color: #21262d; color: #484f58; }
 
-        #status { text-align: center; margin: 15px 0; font-family: monospace; color: #d29922; }
+        #status { text-align: center; margin: 15px 0; font-size: 0.85rem; color: #d29922; }
         
         pre { 
-            background: #010409; padding: 15px; border-radius: 6px; overflow-x: auto; 
-            font-size: 12px; color: #79c0ff; border: 1px solid #30363d; max-height: 500px;
-            white-space: pre-wrap; line-height: 1.5;
+            background: #010409; padding: 15px; border-radius: 8px; overflow-x: auto; 
+            font-size: 11px; color: #79c0ff; border: 1px solid #30363d; max-height: 450px;
+            white-space: pre-wrap; font-family: monospace;
         }
     </style>
 </head>
@@ -31,58 +31,63 @@
 <div class="container">
     <div class="card">
         <h1>Source Viewer: One Piece</h1>
-        <button id="btn" onclick="fetchWithBypass()">🚀 Obtener Código Fuente</button>
-        <div id="status">Esperando acción...</div>
-        <pre id="output">El código validado aparecerá aquí...</pre>
+        <button id="btn" onclick="masterFetch()">🚀 Forzar Extracción de Código</button>
+        <div id="status">Esperando inicio...</div>
+        <pre id="output">El código aparecerá aquí...</pre>
     </div>
 </div>
 
 <script>
-    // Esta función recibe los datos del proxy de forma "mágica" para el navegador
-    window.handleResponse = function(data) {
-        const out = document.getElementById('output');
-        const stat = document.getElementById('status');
-        
-        if (data && data.contents) {
-            out.textContent = data.contents;
-            stat.innerHTML = "<span style='color:#3fb950'>✅ ¡Éxito! Código obtenido.</span>";
-        } else {
-            stat.innerHTML = "<span style='color:#f85149'>❌ El servidor no devolvió datos.</span>";
-        }
-        
-        document.getElementById('btn').disabled = false;
-        // Limpieza
-        const oldScript = document.getElementById('proxy-script');
-        if (oldScript) oldScript.remove();
-    };
+    const targetUrl = 'https://kurigames.com/one-piece-card-game/';
 
-    function fetchWithBypass() {
+    async function masterFetch() {
         const btn = document.getElementById('btn');
         const out = document.getElementById('output');
         const status = document.getElementById('status');
-        const target = 'https://kurigames.com/one-piece-card-game/';
 
         btn.disabled = true;
-        status.innerText = "⚡ Bypass activado: Inyectando Script...";
-        out.textContent = "Solicitando datos de kurigames.com...";
+        out.textContent = "Probando múltiples rutas de conexión...";
 
-        // Creamos un elemento SCRIPT para saltarnos el bloqueo de FETCH de Brave
-        const script = document.createElement('script');
-        script.id = 'proxy-script';
-        // Usamos JSONP (callback) para que Brave crea que es una librería JS normal
-        script.src = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}&callback=handleResponse`;
+        // Intentaremos 3 métodos diferentes en orden de eficacia
+        const proxies = [
+            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+            `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+            `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+        ];
+
+        let success = false;
+
+        for (let i = 0; i < proxies.length; i++) {
+            status.innerHTML = `⚡ Intentando ruta ${i + 1} de ${proxies.length}...`;
+            try {
+                const response = await fetch(proxies[i]);
+                if (!response.ok) throw new Error();
+                
+                let data = await response.text();
+                
+                // Si es el proxy de AllOrigins, viene en formato JSON
+                if (data.startsWith('{"contents":')) {
+                    const json = JSON.parse(data);
+                    data = json.contents;
+                }
+
+                if (data && data.length > 500) {
+                    out.textContent = data;
+                    status.innerHTML = "<span style='color:#3fb950'>✅ ¡CONSEGUIDO! Código extraído.</span>";
+                    success = true;
+                    break; // Si uno funciona, paramos
+                }
+            } catch (e) {
+                console.log(`Ruta ${i+1} falló`);
+            }
+        }
+
+        if (!success) {
+            status.innerHTML = "<span style='color:#f85149'>❌ Todas las rutas fallaron en Brave.</span>";
+            out.textContent = "CAUSA POSIBLE:\nTu conexión o navegador bloquea los servicios de ayuda.\n\nPRUEBA ESTO:\n1. Abre esta web en una PESTAÑA DE INCÓGNITO en Brave.\n2. Si estás usando una VPN o AdGuard, desactívalo un momento.";
+        }
         
-        script.onerror = function() {
-            status.innerHTML = "<span style='color:#f85149'>❌ Bloqueo persistente de Brave</span>";
-            out.textContent = "Brave Shields sigue bloqueando la petición.\n\n" +
-                             "POR FAVOR:\n" +
-                             "1. Pulsa el icono del LEÓN en la barra de direcciones.\n" +
-                             "2. Desactiva los escudos para esta web.\n" +
-                             "3. ¡Funcionará al instante!";
-            btn.disabled = false;
-        };
-
-        document.body.appendChild(script);
+        btn.disabled = false;
     }
 </script>
 
