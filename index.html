@@ -26,7 +26,7 @@
     <div id="loader-container">
         <div class="loader-bar"></div>
     </div><div id="status"><div class="spinner"></div></div><div id="searchContainer" style="display:none;width:95%;max-width:500px;margin:10px auto 0 auto;gap:8px;align-items:center;padding-bottom:10px;"><div style="position:relative;flex:1;display:flex;align-items:center"><input type="text" id="globalSearchInput" placeholder="Buscar canal, equipo o competición..." style="width:100%;padding:12px 40px 12px 16px;border-radius:12px;border:1px solid var(--border-color);background:var(--card-bg);color:#fff;font-size:.9rem;outline:0"><span id="clearSearch" style="position:absolute;right:12px;color:var(--text-muted);cursor:pointer;display:none;font-size:1.2rem;user-select:none">&times;</span></div></div><div id="events-container"></div>
-<div id="noResultsContainer" style="display:none;text-align:center;padding:40px;color:var(--text-muted)"><div><div style="font-size:3rem;margin-bottom:10px;color:var(--accent-blue)" class="material-symbols-outlined">satellite_alt</div><div style="font-weight:700;font-size:1.1rem;color:var(--text-main)">Sin resultados</div><div style="font-size:.85rem;margin-top:5px;opacity:.8">Intenta con otra búsqueda</div></div></div><div id="ids-modal" class="modal-overlay" onclick="UIManager.closeModal(event)"><div class="modal-content" onclick="event.stopPropagation()"><div id="modal-title" class="modal-title">Canales</div><div id="ids-list" class="ids-list"></div></div></div><div id="player-modal"><div id="player-header"><div id="player-ch-name" style="font-weight:700;font-size:0.8rem;color:var(--accent-blue);text-transform:uppercase;letter-spacing:1px"></div><div onclick="UIManager.closePlayer()" style="cursor:pointer;display:flex;align-items:center;color:white"><span class="material-symbols-outlined">close</span></div></div><div id="video-container"><video id="main-video" controls playsinline></video></div></div><nav class="bottom-nav"><div class="nav-item active" id="nav-home" onclick='UIManager.switchTab("home")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span><span>EVENTOS</span></div><div class="nav-item" id="nav-channels" onclick='UIManager.switchTab("channels")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span><span>CANALES</span></div></nav><script>const CONFIG = {
+<div id="noResultsContainer" style="display:none;text-align:center;padding:40px;color:var(--text-muted)"><div><div style="font-size:3rem;margin-bottom:10px;color:var(--accent-blue)" class="material-symbols-outlined">satellite_alt</div><div style="font-weight:700;font-size:1.1rem;color:var(--text-main)">Sin resultados</div><div style="font-size:.85rem;margin-top:5px;opacity:.8">Intenta con otra búsqueda</div></div></div><div id="ids-modal" class="modal-overlay" onclick="UIManager.closeModal(event)"><div class="modal-content" onclick="event.stopPropagation()"><div id="modal-title" class="modal-title">Canales</div><div id="ids-list" class="ids-list"></div></div></div><div id="player-modal"><div id="player-header"><div id="player-ch-name" style="font-weight:700;font-size:0.8rem;color:var(--accent-blue);text-transform:uppercase;letter-spacing:1px"></div><div id="player-status-text" style="font-size:0.6rem;color:#888"></div><div onclick="UIManager.closePlayer()" style="cursor:pointer;display:flex;align-items:center;color:white"><span class="material-symbols-outlined">close</span></div></div><div id="video-container"><video id="main-video" controls playsinline></video></div></div><nav class="bottom-nav"><div class="nav-item active" id="nav-home" onclick='UIManager.switchTab("home")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span><span>EVENTOS</span></div><div class="nav-item" id="nav-channels" onclick='UIManager.switchTab("channels")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span><span>CANALES</span></div></nav><script>const CONFIG = {
             BASE_URL: 'https://www.futbolenlatv.es',
             TARGET_URL: 'https://www.futbolenlatv.es/deporte',
             GIST_LOGOS: 'https://gist.githubusercontent.com/Ciento20/5580f05d8ecab2a3de797d7ef4365406/raw/',
@@ -812,6 +812,8 @@
                     if(!res.ok) throw new Error();
                     document.getElementById('player-modal').style.display = 'flex';
                     document.getElementById('player-ch-name').textContent = name;
+                    const statusText = document.getElementById('player-status-text');
+                    statusText.textContent = 'Conectando al motor...';
                     
                     if (Hls.isSupported()) {
                         if(this.hls) this.hls.destroy();
@@ -820,6 +822,7 @@
                         this.hls.attachMedia(video);
                         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
                             video.play();
+                            statusText.textContent = 'Reproduciendo (Ace Serve) ✓';
                             RatingEngine.trackStart(id, name, index);
                         });
                         this.hls.on(Hls.Events.ERROR, (e, data) => {
@@ -828,7 +831,8 @@
                     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                         video.src = streamUrl;
                         video.play();
-                        RatingEngine.trackStart(id, name, index);
+                            statusText.textContent = 'Reproduciendo (Ace Serve) ✓';
+                            RatingEngine.trackStart(id, name, index);
                     } else {
                         fallback();
                     }
