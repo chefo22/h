@@ -833,20 +833,32 @@
                     list.appendChild(btn);
                 });
                 this.modal.style.display = 'flex';
-            },            closeModal() { this.modal.style.display = 'none'; },
-
-            loadVideo(id) {
+            },            closeModal() { this.modal.style.display = 'none'; },            loadVideo(id) {
                 const container = document.getElementById('video-container');
                 const video = document.getElementById('main-video');
                 if (!id) return;
                 
                 this.closeModal();
-                container.style.display = 'flex';
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
+                const appUrl = `acestream://${id}`;
+                
+                // Función híbrida: si el motor local falla, abre la App externa
+                const openExternalApp = () => {
+                    container.style.display = 'none';
+                    location.href = appUrl;
+                    console.log('Redirigiendo a App externa...');
+                };
+
+                container.style.display = 'flex';
 
                 if (Hls.isSupported()) {
                     if (window.hls) window.hls.destroy();
-                    window.hls = new Hls();
+                    // Configuración de detección: si el motor local no responde en 3s, saltamos a la App
+                    window.hls = new Hls({
+                        manifestLoadingTimeOut: 3000,
+                        manifestLoadingMaxRetry: 0,
+                        fragLoadingTimeOut: 10000
+                    });
                     window.hls.loadSource(streamUrl);
                     window.hls.attachMedia(video);
                     window.hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -854,12 +866,26 @@
                     });
                     window.hls.on(Hls.Events.ERROR, (event, data) => {
                         if (data.fatal) {
-                            alert('Error: Asegúrate de que Ace Serve esté iniciado y hayas permitido "Contenido no seguro" en los ajustes de Brave.');
+                            // Si el error es de red (motor apagado o inaccesible), abrir App
+                            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                openExternalApp();
+                            } else {
+                                window.hls.destroy();
+                                container.style.display = 'none';
+                                alert('Error de reproducción local. Reintenta o usa la App Acestream.');
+                            }
                         }
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
-                    video.play().catch(e => console.log('Autoplay blocked:', e));
+                    video.play().catch(() => openExternalApp());
+                    
+                    // Fallback para navegadores móviles que no disparan catch de red inmediatamente
+                    setTimeout(() => {
+                        if (video.paused && (video.networkState === 3 || video.readyState === 0)) {
+                            openExternalApp();
+                        }
+                    }, 3500);
                 }
 
                 window.scrollTo({top: 0, behavior: 'smooth'});
