@@ -511,10 +511,10 @@
                     const v = old.querySelector('video');
                     if (v) {
                         if (v._hls) { v._hls.detachMedia(); v._hls.destroy(); }
-                        v.src = ""; v.load(); // Fuerza al navegador a liberar el hardware de vídeo
+                        v.src = ""; v.load();
                     }
                     old.remove();
-                    await new Promise(r => setTimeout(r, 400)); // Pausa técnica para que AceStream cierre el proceso anterior
+                    await new Promise(r => setTimeout(r, 400));
                 }
 
                 const playerHtml = `
@@ -523,7 +523,7 @@
                             <div style="display:flex;align-items:center;pointer-events:none;height:22px;">
                                 ${channelLogosMap[getCanonicalName(name)] ? `<img src="${channelLogosMap[getCanonicalName(name)]}" style="height:100%;max-width:100px;object-fit:contain;filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));">` : `<span style="font-size:0.7rem;font-weight:bold;color:var(--accent-blue);">${name}</span>`}
                             </div>
-                            <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove();}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
+                            <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove(); if(window._retryTimer) clearTimeout(window._retryTimer);}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
                         </div>
                         <video id="internal-video" autoplay controls style="width:100%;aspect-ratio:16/9;background:#000;display:block;"></video>
                     </div>`;
@@ -536,10 +536,8 @@
                 const dragStart = (e) => {
                     const event = e.type === 'touchstart' ? e.touches[0] : e;
                     x1 = event.clientX; y1 = event.clientY;
-                    document.onmousemove = dragMove;
-                    document.ontouchmove = dragMove;
-                    document.onmouseup = dragEnd;
-                    document.ontouchend = dragEnd;
+                    document.onmousemove = dragMove; document.ontouchmove = dragMove;
+                    document.onmouseup = dragEnd; document.ontouchend = dragEnd;
                     el.style.boxShadow = "0 15px 40px rgba(0,0,0,0.9)";
                 };
 
@@ -556,44 +554,52 @@
                     document.onmousemove = null; document.onmouseup = null;
                     document.ontouchmove = null; document.ontouchend = null;
                     el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8)";
-                };                handle.onmousedown = dragStart;
+                };
+
+                handle.onmousedown = dragStart;
                 handle.ontouchstart = dragStart;
 
                 const video = document.getElementById('internal-video');
 
-                // Gestión de visibilidad en modo Picture-in-Picture (Evita la pausa al salir)
-                video.addEventListener('enterpictureinpicture', () => {
-                    el.style.display = 'none';
-                });
+                // Lógica de Auto-salto si no reproduce en 3 segundos
+                if (window._retryTimer) clearTimeout(window._retryTimer);
+                window._retryTimer = setTimeout(() => {
+                    if (video && (video.paused || video.readyState < 3 || video.currentTime === 0)) {
+                        console.log("Auto-skip: El canal no carga, intentando siguiente...");
+                        if (video._hls) video._hls.destroy();
+                        el.remove();
+                        this.playBestOrNext(name);
+                    }
+                }, 3500);
+
+                video.onplaying = () => {
+                    clearTimeout(window._retryTimer);
+                    console.log("Reproducción iniciada: Auto-skip cancelado.");
+                };
+
+                video.addEventListener('enterpictureinpicture', () => { el.style.display = 'none'; });
                 video.addEventListener('leavepictureinpicture', () => {
                     el.style.display = 'flex';
-                    // Algunos navegadores pausan el vídeo automáticamente al cerrar el PiP;
-                    // lo reanudamos forzosamente tras un breve delay para asegurar la visibilidad del elemento.
-                    setTimeout(() => {
-                        video.play().catch(() => console.log("Reanudación post-PiP bloqueada"));
-                    }, 100);
+                    setTimeout(() => { video.play().catch(() => {}); }, 100);
                 });
 
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
 
                 try {
-                    // Intento de conexión ligera para comprobar si el motor está encendido
                     let isAlive = await fetch('http://127.0.0.1:6878/webui/api/service?method=get_version', { mode: 'no-cors' }).then(() => true).catch(() => false);
                     if (!isAlive) {
-                        console.log("🚀 Despertando AceStream Engine...");
                         window.location.href = 'acestream://';
-                        await new Promise(r => setTimeout(r, 4500)); // Espera estratégica para el arranque
+                        await new Promise(r => setTimeout(r, 4500));
                     }
-                } catch (e) { }                if (Hls.isSupported()) {
+                } catch (e) { }
+
+                if (Hls.isSupported()) {
                     const hls = new Hls();
                     video._hls = hls;
                     hls.loadSource(streamUrl);
                     hls.attachMedia(video);
                     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                        video.play().catch(() => console.log("Auto-play bloqueado"));
-                    });
-                    hls.on(Hls.Events.ERROR, (event, data) => {
-                        if (data.fatal) console.log("Error fatal de red (Ace Serve)");
+                        video.play().catch(() => {});
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
@@ -911,11 +917,12 @@
                 } else {
                     location.href = 'acestream://' + matching[nextIndex].id;
                 }
-            },            async openIdsModal(event, channelName) {
+            },
+
+            openIdsModal(event, channelName) {
                 event.stopPropagation();
                 const list = document.getElementById('ids-list');
                 const title = document.getElementById('modal-title');
-                const isInternal = (localStorage.getItem('player_mode') || 'external') === 'internal';
                 
                 const matching = aceStreamMap
                     .filter(a => ComparisonEngine.isMatch(channelName, a.name))
@@ -930,21 +937,12 @@
                     if (pending && pending.id === item.id) {
                         currentRating = Math.max(0.0, currentRating - 1.5);
                     }
-                    
                     const btn = document.createElement('div');
-                    btn.className = 'id-item';
-                    btn.innerHTML = `
-                        <div style="display:flex; flex-direction:column; align-items:flex-start; flex:1.2;">
-                            <small style="color: var(--text-muted); font-size: 0.55rem; font-weight: 700; opacity: 0.6; text-transform:uppercase;">${item.source || 'ID'}</small>
-                            <span style="font-family: monospace; font-size:0.7rem; opacity:0.8;">${item.id.substring(0, 10).toUpperCase()}</span>
-                        </div>
-                        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;">
-                            <span class="id-rating" style="font-size:0.75rem;">★ ${currentRating.toFixed(1)}</span>
-                            ${isInternal ? `<span id="peers-${item.id}" style="font-size:0.55rem; color:var(--accent-blue); font-weight:600; opacity:0.7;">buscando...</span>` : ''}
-                        </div>
-                    `;
-                    
-                    btn.onclick = () => {
+                    btn.className = 'id-item';                    btn.innerHTML = `
+                        <small style="flex: 1; text-align: left; color: var(--text-muted); font-size: 0.6rem; font-weight: 700; opacity: 0.6; letter-spacing: 0.5px;">${item.source || 'ID'}</small>
+                        <span style="flex: 2; text-align: center; font-family: monospace; opacity: 0.9;">${item.id.substring(0, 10).toUpperCase()}</span>
+                        <span class="id-rating" style="flex: 1; text-align: right;">★ ${currentRating.toFixed(1)}</span>
+                    `;                    btn.onclick = () => {
                         RatingEngine.trackStart(item.id, getCanonicalName(channelName), i);
                         const mode = localStorage.getItem('player_mode') || 'external';
                         if (mode === 'internal') {
@@ -955,24 +953,6 @@
                         }
                     };
                     list.appendChild(btn);
-
-                    // Extracción de metadata en tiempo real si el modo interno está activo
-                    if (isInternal) {
-                        fetch(`http://127.0.0.1:6878/ace/get_stat?id=${item.id}`)
-                            .then(r => r.json())
-                            .then(data => {
-                                const pElem = document.getElementById(`peers-${item.id}`);
-                                if (pElem && data.response) {
-                                    const peers = data.response.peers || 0;
-                                    pElem.textContent = `${peers} PEERS`;
-                                    if (peers > 0) pElem.style.opacity = "1";
-                                    if (peers > 40) pElem.style.color = "#00ff88";
-                                }
-                            }).catch(() => {
-                                const pElem = document.getElementById(`peers-${item.id}`);
-                                if (pElem) pElem.textContent = "OFFLINE";
-                            });
-                    }
                 });
                 this.modal.style.display = 'flex';
             },            closeModal() { this.modal.style.display = 'none'; },
