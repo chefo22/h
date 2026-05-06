@@ -502,15 +502,9 @@
                 this.updatePlayerButton();
             },
             updatePlayerButton() {
-                let btn = document.getElementById('fab-player-toggle');
-                if (!btn) {
-                    const btnHtml = `<div id="fab-player-toggle" onclick="UIManager.togglePlayerMode()" style="position:fixed;bottom:70px;right:20px;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,0.5);border:2px solid var(--accent-blue);cursor:pointer;transition:all 0.3s ease;"></div>`;
-                    document.body.insertAdjacentHTML('beforeend', btnHtml);
-                    btn = document.getElementById('fab-player-toggle');
-                }
-                const mode = localStorage.getItem('player_mode') || 'external';
-                btn.innerHTML = mode === 'internal' ? '<i class="material-symbols-outlined" style="color:white;font-size:1.4rem;">laptop_windows</i>' : '<i class="material-symbols-outlined" style="color:var(--accent-blue);font-size:1.4rem;">rocket_launch</i>';
-                btn.style.background = mode === 'internal' ? 'var(--accent-blue)' : 'var(--card-bg)';
+                // Botón eliminado: El cambio de modo se gestiona exclusivamente mediante el comando /r
+                const btn = document.getElementById('fab-player-toggle');
+                if (btn) btn.remove();
             },            async openInternalPlayer(id, name) {
                 const old = document.getElementById('internal-player-container');
                 if (old) {
