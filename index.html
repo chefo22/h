@@ -567,12 +567,17 @@
 
                 const video = document.getElementById('internal-video');
 
-                // Gestión de visibilidad en modo Picture-in-Picture
+                // Gestión de visibilidad en modo Picture-in-Picture (Evita la pausa al salir)
                 video.addEventListener('enterpictureinpicture', () => {
                     el.style.display = 'none';
                 });
                 video.addEventListener('leavepictureinpicture', () => {
                     el.style.display = 'flex';
+                    // Algunos navegadores pausan el vídeo automáticamente al cerrar el PiP;
+                    // lo reanudamos forzosamente tras un breve delay para asegurar la visibilidad del elemento.
+                    setTimeout(() => {
+                        video.play().catch(() => console.log("Reanudación post-PiP bloqueada"));
+                    }, 100);
                 });
 
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
