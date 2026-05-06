@@ -487,13 +487,12 @@
                 });
                 return results;
             }
-        };
-
-        const UIManager = {
+        };        const UIManager = {
             container: document.getElementById('events-container'),
             status: document.getElementById('status'),
             modal: document.getElementById('ids-modal'),
             lastClickTime: 0,
+            autoRetryTimer: null,
 
             togglePlayerMode() {
                 const current = localStorage.getItem('player_mode') || 'external';
@@ -506,6 +505,7 @@
                 const btn = document.getElementById('fab-player-toggle');
                 if (btn) btn.remove();
             },            async openInternalPlayer(id, name) {
+                if (this.autoRetryTimer) { clearTimeout(this.autoRetryTimer); this.autoRetryTimer = null; }
                 const old = document.getElementById('internal-player-container');
                 if (old) {
                     const v = old.querySelector('video');
@@ -523,7 +523,7 @@
                             <div style="display:flex;align-items:center;pointer-events:none;height:22px;">
                                 ${channelLogosMap[getCanonicalName(name)] ? `<img src="${channelLogosMap[getCanonicalName(name)]}" style="height:100%;max-width:100px;object-fit:contain;filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));">` : `<span style="font-size:0.7rem;font-weight:bold;color:var(--accent-blue);">${name}</span>`}
                             </div>
-                            <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove(); if(window._retryTimer) clearTimeout(window._retryTimer);}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
+                            <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove();}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
                         </div>
                         <video id="internal-video" autoplay controls style="width:100%;aspect-ratio:16/9;background:#000;display:block;"></video>
                     </div>`;
@@ -554,29 +554,11 @@
                     document.onmousemove = null; document.onmouseup = null;
                     document.ontouchmove = null; document.ontouchend = null;
                     el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8)";
-                };
+                }; 
+                handle.onmousedown = dragStart; handle.ontouchstart = dragStart;
 
-                handle.onmousedown = dragStart;
-                handle.ontouchstart = dragStart;
-
-                const video = document.getElementById('internal-video');                // Lógica de Auto-salto: Si no reproduce en 3 segundos, salta al siguiente ID
-                if (window._retryTimer) clearTimeout(window._retryTimer);
-                window._retryTimer = setTimeout(() => {
-                    if (video && (video.paused || video.readyState < 3 || video.currentTime === 0)) {
-                        console.log("Auto-skip: El enlace no responde, probando el siguiente...");
-                        if (video._hls) {
-                            video._hls.detachMedia();
-                            video._hls.destroy();
-                        }
-                        el.remove();
-                        this.playBestOrNext(name, true);
-                    }
-                }, 3000);
-
-                video.onplaying = () => {
-                    clearTimeout(window._retryTimer);
-                    console.log("Reproducción iniciada: Auto-skip cancelado.");
-                };
+                const video = document.getElementById('internal-video');
+                video.onplaying = () => { if(this.autoRetryTimer) { clearTimeout(this.autoRetryTimer); this.autoRetryTimer = null; } };
 
                 video.addEventListener('enterpictureinpicture', () => { el.style.display = 'none'; });
                 video.addEventListener('leavepictureinpicture', () => {
@@ -585,10 +567,11 @@
                 });
 
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
-
+                let isAlive = false;
                 try {
-                    let isAlive = await fetch('http://127.0.0.1:6878/webui/api/service?method=get_version', { mode: 'no-cors' }).then(() => true).catch(() => false);
+                    isAlive = await fetch('http://127.0.0.1:6878/webui/api/service?method=get_version', { mode: 'no-cors' }).then(() => true).catch(() => false);
                     if (!isAlive) {
+                        console.log("🚀 Despertando AceStream Engine...");
                         window.location.href = 'acestream://';
                         await new Promise(r => setTimeout(r, 4500));
                     }
@@ -599,13 +582,12 @@
                     video._hls = hls;
                     hls.loadSource(streamUrl);
                     hls.attachMedia(video);
-                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                        video.play().catch(() => {});
-                    });
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
                     video.play();
                 }
+                return isAlive;
             },
             switchTab(tab) {
                 if (tab === 'home') {
@@ -884,7 +866,7 @@
                     this.playBestOrNext(channelName);
                 }
                 this.isLongPress = false;
-            },            playBestOrNext(channelName, isRetry = false) {
+            },            playBestOrNext(channelName, triedCount = 0) {
                 const matching = aceStreamMap
                     .filter(a => ComparisonEngine.isMatch(channelName, a.name))
                     .sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
@@ -900,16 +882,10 @@
                 const now = Date.now();
 
                 let nextIndex;
-                // Si es un reintento automático o manual rápido, incrementamos el índice
-                if (isRetry || (now - lastTimestamp < 900000)) {
-                    nextIndex = (lastIndex + 1) % matching.length;
-                    // Si hemos dado la vuelta completa y vuelve al 0 en un reintento, paramos el bucle
-                    if (isRetry && nextIndex === 0) {
-                        console.log("Todos los enlaces probados para: " + channelName);
-                        return;
-                    }
+                // Si es reintento automático o clic rápido, siguiente. Si no, el mejor.
+                if (triedCount > 0 || (now - lastTimestamp < 900000)) {
+                    nextIndex = (triedCount > 0) ? (lastIndex + 1) % matching.length : (lastIndex + 1) % matching.length;
                 } else {
-                    // Reset al mejor tras 15 min de inactividad
                     nextIndex = 0;
                 }
                 
@@ -919,7 +895,25 @@
 
                 const mode = localStorage.getItem('player_mode') || 'external';
                 if (mode === 'internal') {
-                    this.openInternalPlayer(matching[nextIndex].id, getCanonicalName(channelName));
+                    this.openInternalPlayer(matching[nextIndex].id, getCanonicalName(channelName)).then(wasAlive => {
+                        const waitTime = wasAlive ? 5000 : 15000;
+                        if (this.autoRetryTimer) clearTimeout(this.autoRetryTimer);
+                        
+                        this.autoRetryTimer = setTimeout(() => {
+                            const video = document.getElementById('internal-video');
+                            // Si el video no está reproduciéndose (pausado o en el inicio)
+                            if (!video || video.paused || video.currentTime === 0) {
+                                if (triedCount + 1 < matching.length) {
+                                    console.log("Auto-retry: Intentando opción " + (triedCount + 2));
+                                    this.playBestOrNext(channelName, triedCount + 1);
+                                } else {
+                                    console.log("Auto-retry: Agotadas todas las opciones.");
+                                    this.openIdsModal(new Event('click'), channelName);
+                                    if (this.autoRetryTimer) { clearTimeout(this.autoRetryTimer); this.autoRetryTimer = null; }
+                                }
+                            }
+                        }, waitTime);
+                    });
                 } else {
                     location.href = 'acestream://' + matching[nextIndex].id;
                 }
