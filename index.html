@@ -511,30 +511,81 @@
                 const mode = localStorage.getItem('player_mode') || 'external';
                 btn.innerHTML = mode === 'internal' ? '<i class="material-symbols-outlined" style="color:white;font-size:1.4rem;">laptop_windows</i>' : '<i class="material-symbols-outlined" style="color:var(--accent-blue);font-size:1.4rem;">rocket_launch</i>';
                 btn.style.background = mode === 'internal' ? 'var(--accent-blue)' : 'var(--card-bg)';
-            },
-            openInternalPlayer(id, name) {
+            },            async openInternalPlayer(id, name) {
+                const old = document.getElementById('internal-player-container');
+                if (old) {
+                    const v = old.querySelector('video');
+                    if (v) {
+                        if (v._hls) { v._hls.detachMedia(); v._hls.destroy(); }
+                        v.src = ""; v.load(); // Fuerza al navegador a liberar el hardware de vídeo
+                    }
+                    old.remove();
+                    await new Promise(r => setTimeout(r, 400)); // Pausa técnica para que AceStream cierre el proceso anterior
+                }
+
                 const playerHtml = `
-                    <div id="internal-player-container" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;flex-direction:column;">
-                        <div style="padding:10px;display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;border-bottom:1px solid #333;">
-                            <span style="font-size:0.8rem;font-weight:bold;color:var(--accent-blue);">${name}</span>
-                            <button onclick="document.getElementById('internal-player-container').remove()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
+                    <div id="internal-player-container" style="position:fixed;top:20px;right:20px;width:320px;background:#000;z-index:9999;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.8);border:1px solid #444;touch-action:none;transition: box-shadow 0.3s ease;">
+                        <div id="player-handle" style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;border-bottom:1px solid #333;cursor:move;user-select:none;">
+                            <span style="font-size:0.7rem;font-weight:bold;color:var(--accent-blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;pointer-events:none;">${name}</span>
+                            <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove();}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
                         </div>
-                        <video id="internal-video" controls style="flex:1;width:100%;height:100%;background:#000;"></video>
+                        <video id="internal-video" autoplay controls style="width:100%;aspect-ratio:16/9;background:#000;display:block;"></video>
                     </div>`;
                 document.body.insertAdjacentHTML('beforeend', playerHtml);
+
+                const el = document.getElementById('internal-player-container');
+                const handle = document.getElementById('player-handle');
+                let x = 0, y = 0, x1 = 0, y1 = 0;
+
+                const dragStart = (e) => {
+                    const event = e.type === 'touchstart' ? e.touches[0] : e;
+                    x1 = event.clientX; y1 = event.clientY;
+                    document.onmousemove = dragMove;
+                    document.ontouchmove = dragMove;
+                    document.onmouseup = dragEnd;
+                    document.ontouchend = dragEnd;
+                    el.style.boxShadow = "0 15px 40px rgba(0,0,0,0.9)";
+                };
+
+                const dragMove = (e) => {
+                    const event = e.type === 'touchmove' ? e.touches[0] : e;
+                    x = x1 - event.clientX; y = y1 - event.clientY;
+                    x1 = event.clientX; y1 = event.clientY;
+                    el.style.top = (el.offsetTop - y) + "px";
+                    el.style.left = (el.offsetLeft - x) + "px";
+                    el.style.right = 'auto';
+                };
+
+                const dragEnd = () => {
+                    document.onmousemove = null; document.onmouseup = null;
+                    document.ontouchmove = null; document.ontouchend = null;
+                    el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8)";
+                };
+
+                handle.onmousedown = dragStart;
+                handle.ontouchstart = dragStart;
 
                 const video = document.getElementById('internal-video');
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
 
-                if (Hls.isSupported()) {
+                try {
+                    // Intento de conexión ligera para comprobar si el motor está encendido
+                    let isAlive = await fetch('http://127.0.0.1:6878/webui/api/service?method=get_version', { mode: 'no-cors' }).then(() => true).catch(() => false);
+                    if (!isAlive) {
+                        console.log("🚀 Despertando AceStream Engine...");
+                        window.location.href = 'acestream://';
+                        await new Promise(r => setTimeout(r, 4500)); // Espera estratégica para el arranque
+                    }
+                } catch (e) { }                if (Hls.isSupported()) {
                     const hls = new Hls();
+                    video._hls = hls;
                     hls.loadSource(streamUrl);
                     hls.attachMedia(video);
                     hls.on(Hls.Events.MANIFEST_PARSED, () => {
                         video.play().catch(() => console.log("Auto-play bloqueado"));
                     });
                     hls.on(Hls.Events.ERROR, (event, data) => {
-                        if (data.fatal) console.log("Error fatal de red (Ace Serve)", data);
+                        if (data.fatal) console.log("Error fatal de red (Ace Serve)");
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
