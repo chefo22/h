@@ -883,39 +883,65 @@
                     this.playBestOrNext(channelName);
                 }
                 this.isLongPress = false;
-            },            playBestOrNext(channelName) {
-                const matching = aceStreamMap
-                    .filter(a => ComparisonEngine.isMatch(channelName, a.name))
-                    .sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
-
+            },            async playBestOrNext(channelName) {
+                const matching = aceStreamMap.filter(a => ComparisonEngine.isMatch(channelName, a.name));
                 if (matching.length === 0) return;
 
-                const normName = ComparisonEngine.normalizeText(getCanonicalName(channelName));
-                const lastIdxKey = 'last_idx_' + normName;
-                const lastTimeKey = 'last_ts_' + normName;
-                
-                const lastIndex = parseInt(localStorage.getItem(lastIdxKey)) || 0;
-                const lastTimestamp = parseInt(localStorage.getItem(lastTimeKey)) || 0;
-                const now = Date.now();
-
-                let nextIndex;
-                // Si han pasado más de 15 minutos (900.000 ms), reseteamos al mejor (índice 0)
-                if (now - lastTimestamp > 900000) {
-                    nextIndex = 0;
-                } else {
-                    // Si es un clic rápido (reintento), pasamos al siguiente
-                    nextIndex = (lastIndex + 1) % matching.length;
-                }
-                
-                localStorage.setItem(lastIdxKey, nextIndex);
-                localStorage.setItem(lastTimeKey, now);
-                RatingEngine.trackStart(matching[nextIndex].id, getCanonicalName(channelName), nextIndex);
-
                 const mode = localStorage.getItem('player_mode') || 'external';
+                const canon = getCanonicalName(channelName);
+                let selectedItem;
+
                 if (mode === 'internal') {
-                    this.openInternalPlayer(matching[nextIndex].id, getCanonicalName(channelName));
+                    // MODO INTELIGENTE: Consulta al motor para encontrar el enlace con más Peers/Salud
+                    this.status.style.display = 'flex';
+                    this.status.innerHTML = `<div style="background:rgba(0,0,0,0.85); padding:15px; border-radius:12px; text-align:center; border:1px solid var(--accent-blue);">
+                        <div class="spinner" style="width:24px; height:24px; margin:0 auto 10px;"></div>
+                        <span style="font-size:0.7rem; color:white; font-weight:700; letter-spacing:0.5px;">ANALIZANDO SEÑALES...</span>
+                    </div>`;
+
+                    // Seleccionamos los 3 mejores por rating histórico para testear
+                    const candidates = matching.sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id)).slice(0, 3);
+                    
+                    try {
+                        const stats = await Promise.all(candidates.map(async (item) => {
+                            try {
+                                // Intentamos obtener info del stream sin iniciarlo completamente
+                                const controller = new AbortController();
+                                setTimeout(() => controller.abort(), 1500);
+                                const resp = await fetch(`http://127.0.0.1:6878/ace/get_stream_info?id=${item.id}`, { signal: controller.signal });
+                                const info = await resp.json();
+                                return { ...item, score: (info.result?.peers || 0) * 10 + (info.result?.quality || 0) };
+                            } catch (e) { 
+                                return { ...item, score: RatingEngine.getScore(item.id) }; 
+                            }
+                        }));
+                        selectedItem = stats.sort((a, b) => b.score - a.score)[0];
+                    } catch (err) {
+                        selectedItem = candidates[0];
+                    } finally {
+                        this.status.style.display = 'none';
+                    }
                 } else {
-                    location.href = 'acestream://' + matching[nextIndex].id;
+                    // MODO CLÁSICO: Basado en Rating y Rotación (Útil para apps externas)
+                    const sorted = matching.sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
+                    const normName = ComparisonEngine.normalizeText(canon);
+                    const lastIdxKey = 'last_idx_' + normName;
+                    const lastTimeKey = 'last_ts_' + normName;
+                    const lastIndex = parseInt(localStorage.getItem(lastIdxKey)) || 0;
+                    const lastTimestamp = parseInt(localStorage.getItem(lastTimeKey)) || 0;
+                    const now = Date.now();
+
+                    let nextIndex = (now - lastTimestamp > 900000) ? 0 : (lastIndex + 1) % sorted.length;
+                    localStorage.setItem(lastIdxKey, nextIndex);
+                    localStorage.setItem(lastTimeKey, now);
+                    selectedItem = sorted[nextIndex];
+                }
+
+                RatingEngine.trackStart(selectedItem.id, canon);
+                if (mode === 'internal') {
+                    this.openInternalPlayer(selectedItem.id, canon);
+                } else {
+                    location.href = 'acestream://' + selectedItem.id;
                 }
             },
 
@@ -976,8 +1002,13 @@
                 cBtn.style.display = 'block';
             }
             UIManager.switchTab(currentTab);
-            UIManager.updatePlayerButton();
-            gInput.addEventListener('input', (e) => {
+            UIManager.updatePlayerButton();            gInput.addEventListener('input', (e) => {
+                if (e.target.value === '/r') {
+                    UIManager.togglePlayerMode();
+                    e.target.value = '';
+                    cBtn.style.display = 'none';
+                    return;
+                }
                 cBtn.style.display = e.target.value ? 'block' : 'none';
                 clearTimeout(sT);
                 sT = setTimeout(() => {
