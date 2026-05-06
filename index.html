@@ -21,29 +21,11 @@
         #events-container.search-mode-active .event-card {
             width: 100%;
         }
-
-        /* Player e Interfaz del Botón Flotante */
-        #video-container{display:none;width:100%;max-width:800px;background:#000;position:sticky;top:0;z-index:1100;aspect-ratio:16/9;box-shadow:0 4px 20px rgba(0,0,0,0.5);border-bottom:2px solid var(--accent-blue);align-items:center;justify-content:center}#main-video{width:100%;height:100%;display:block}#close-player{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700;z-index:1101;cursor:pointer;backdrop-filter:blur(4px)}
-        .fab-player-toggle {
-            position: fixed; bottom: 65px; right: 20px; width: 50px; height: 50px;
-            background: var(--card-bg); border: 2px solid var(--accent-blue); border-radius: 50%;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 2000; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.6); transition: transform 0.2s;
-        }
-        .fab-player-toggle:active { transform: scale(0.9); }
-        .fab-player-toggle i { font-size: 1.3rem; color: var(--accent-blue); }
-        .fab-label { font-size: 0.5rem; font-weight: 900; color: #fff; margin-top: -2px; }
         </style></head><body>
-    <div id="video-container"><button id="close-player" onclick="UIManager.closeVideo()">CERRAR ✕</button><video id="main-video" controls autoplay playsinline></video></div>
     <div id="loader-container">
         <div class="loader-bar"></div>
     </div><div id="status"><div class="spinner"></div></div><div id="searchContainer" style="display:none;width:95%;max-width:500px;margin:10px auto 0 auto;gap:8px;align-items:center;padding-bottom:10px;"><div style="position:relative;flex:1;display:flex;align-items:center"><input type="text" id="globalSearchInput" placeholder="Buscar canal, equipo o competición..." style="width:100%;padding:12px 40px 12px 16px;border-radius:12px;border:1px solid var(--border-color);background:var(--card-bg);color:#fff;font-size:.9rem;outline:0"><span id="clearSearch" style="position:absolute;right:12px;color:var(--text-muted);cursor:pointer;display:none;font-size:1.2rem;user-select:none">&times;</span></div></div><div id="events-container"></div>
-<div id="noResultsContainer" style="display:none;text-align:center;padding:40px;color:var(--text-muted)"><div><div style="font-size:3rem;margin-bottom:10px;color:var(--accent-blue)" class="material-symbols-outlined">satellite_alt</div><div style="font-weight:700;font-size:1.1rem;color:var(--text-main)">Sin resultados</div><div style="font-size:.85rem;margin-top:5px;opacity:.8">Intenta con otra búsqueda</div></div></div><div id="ids-modal" class="modal-overlay" onclick="UIManager.closeModal(event)"><div class="modal-content" onclick="event.stopPropagation()"><div id="modal-title" class="modal-title">Canales</div><div id="ids-list" class="ids-list"></div></div></div><nav class="bottom-nav"><div class="nav-item active" id="nav-home" onclick='UIManager.switchTab("home")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span><span>EVENTOS</span></div><div class="nav-item" id="nav-channels" onclick='UIManager.switchTab("channels")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span><span>CANALES</span></div></nav>
-    <div class="fab-player-toggle" id="playerModeBtn" onclick="UIManager.togglePlayerMode()">
-        <i class="material-symbols-outlined" id="playerModeIcon">rocket_launch</i>
-        <span class="fab-label" id="playerModeText">EXTERNO</span>
-    </div>
-    <script>const CONFIG = {
+<div id="noResultsContainer" style="display:none;text-align:center;padding:40px;color:var(--text-muted)"><div><div style="font-size:3rem;margin-bottom:10px;color:var(--accent-blue)" class="material-symbols-outlined">satellite_alt</div><div style="font-weight:700;font-size:1.1rem;color:var(--text-main)">Sin resultados</div><div style="font-size:.85rem;margin-top:5px;opacity:.8">Intenta con otra búsqueda</div></div></div><div id="ids-modal" class="modal-overlay" onclick="UIManager.closeModal(event)"><div class="modal-content" onclick="event.stopPropagation()"><div id="modal-title" class="modal-title">Canales</div><div id="ids-list" class="ids-list"></div></div></div><nav class="bottom-nav"><div class="nav-item active" id="nav-home" onclick='UIManager.switchTab("home")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span><span>EVENTOS</span></div><div class="nav-item" id="nav-channels" onclick='UIManager.switchTab("channels")'><span class="nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span><span>CANALES</span></div></nav><script>const CONFIG = {
             BASE_URL: 'https://www.futbolenlatv.es',
             TARGET_URL: 'https://www.futbolenlatv.es/deporte',
             GIST_LOGOS: 'https://gist.githubusercontent.com/Ciento20/5580f05d8ecab2a3de797d7ef4365406/raw/',
@@ -805,11 +787,9 @@
                 const now = Date.now();
 
                 let nextIndex;
-                // Si han pasado más de 15 minutos (900.000 ms), reseteamos al mejor (índice 0)
                 if (now - lastTimestamp > 900000) {
                     nextIndex = 0;
                 } else {
-                    // Si es un clic rápido (reintento), pasamos al siguiente
                     nextIndex = (lastIndex + 1) % matching.length;
                 }
                 
@@ -817,7 +797,40 @@
                 localStorage.setItem(lastTimeKey, now);
                 RatingEngine.trackStart(matching[nextIndex].id, getCanonicalName(channelName), nextIndex);
 
-                this.loadVideo(matching[nextIndex].id);
+                const mode = localStorage.getItem('player_mode') || 'external';
+                if (mode === 'internal') {
+                    this.openInternalPlayer(matching[nextIndex].id, getCanonicalName(channelName));
+                } else {
+                    location.href = 'acestream://' + matching[nextIndex].id;
+                }
+            },
+            openInternalPlayer(id, name) {
+                const playerHtml = `
+                    <div id="internal-player-container" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;flex-direction:column;">
+                        <div style="padding:10px;display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;border-bottom:1px solid #333;">
+                            <span style="font-size:0.8rem;font-weight:bold;color:var(--accent-blue);">${name}</span>
+                            <button onclick="document.getElementById('internal-player-container').remove()" style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer;">&times;</button>
+                        </div>
+                        <iframe src="https://aceplayer.xyz/p/${id}" style="flex:1;border:none;" allowfullscreen></iframe>
+                    </div>`;
+                document.body.insertAdjacentHTML('beforeend', playerHtml);
+            },
+            togglePlayerMode() {
+                const current = localStorage.getItem('player_mode') || 'external';
+                const next = current === 'external' ? 'internal' : 'external';
+                localStorage.setItem('player_mode', next);
+                this.updatePlayerButton();
+            },
+            updatePlayerButton() {
+                let btn = document.getElementById('fab-player-toggle');
+                if (!btn) {
+                    const btnHtml = `<div id="fab-player-toggle" onclick="UIManager.togglePlayerMode()" style="position:fixed;bottom:70px;right:20px;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,0.5);border:2px solid var(--accent-blue);cursor:pointer;transition:all 0.3s ease;"></div>`;
+                    document.body.insertAdjacentHTML('beforeend', btnHtml);
+                    btn = document.getElementById('fab-player-toggle');
+                }
+                const mode = localStorage.getItem('player_mode') || 'external';
+                btn.innerHTML = mode === 'internal' ? '<i class="material-symbols-outlined" style="color:white;font-size:1.4rem;">laptop_windows</i>' : '<i class="material-symbols-outlined" style="color:var(--accent-blue);font-size:1.4rem;">rocket_launch</i>';
+                btn.style.background = mode === 'internal' ? 'var(--accent-blue)' : 'var(--card-bg)';
             },
 
             openIdsModal(event, channelName) {
@@ -846,70 +859,17 @@
                     `;
                     btn.onclick = () => {
                         RatingEngine.trackStart(item.id, getCanonicalName(channelName), i);
-                        UIManager.loadVideo(item.id);
+                        window.location.href = `acestream://${item.id}`;
                     };
                     list.appendChild(btn);
                 });
                 this.modal.style.display = 'flex';
-            },            closeModal() { this.modal.style.display = 'none'; },            setRandomColor() {
+            },            closeModal() { this.modal.style.display = 'none'; },
+
+            setRandomColor() {
                 const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
                 document.documentElement.style.setProperty('--accent-blue', randomColor);
                 localStorage.setItem('custom_accent_color', randomColor);
-            },
-
-            togglePlayerMode() {
-                let current = localStorage.getItem('player_pref') || 'externo';
-                let next = (current === 'externo') ? 'intento' : 'externo';
-                localStorage.setItem('player_pref', next);
-                this.updatePlayerModeUI();
-            },
-
-            updatePlayerModeUI() {
-                const mode = localStorage.getItem('player_pref') || 'externo';
-                const icon = document.getElementById('playerModeIcon');
-                const text = document.getElementById('playerModeText');
-                if (!icon || !text) return;
-                if (mode === 'externo') {
-                    icon.textContent = 'rocket_launch';
-                    text.textContent = 'EXTERNO';
-                } else {
-                    icon.textContent = 'language';
-                    text.textContent = 'INTENTO';
-                }
-            },
-
-            loadVideo(id) {
-                if (!id) return;
-                this.closeModal();
-                const mode = localStorage.getItem('player_pref') || 'externo';
-                if (mode === 'externo') {
-                    location.href = `acestream://${id}`;
-                    return;
-                }
-                const container = document.getElementById('video-container');
-                const video = document.getElementById('main-video');
-                container.style.display = 'flex';
-                if (Hls.isSupported()) {
-                    if (window.hls) window.hls.destroy();
-                    window.hls = new Hls();
-                    window.hls.loadSource(`http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`);
-                    window.hls.attachMedia(video);
-                    window.hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                    video.src = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
-                    video.play();
-                }
-                window.scrollTo({top: 0, behavior: 'smooth'});
-            },
-
-            closeVideo() {
-                const container = document.getElementById('video-container');
-                const video = document.getElementById('main-video');
-                container.style.display = 'none';
-                video.pause();
-                if (window.hls) { window.hls.destroy(); window.hls = null; }
-                video.src = '';
-                video.load();
             }
         };        async function init() {
             const savedColor = localStorage.getItem('custom_accent_color');
@@ -925,6 +885,7 @@
                 cBtn.style.display = 'block';
             }
             UIManager.switchTab(currentTab);
+            UIManager.updatePlayerButton();
             gInput.addEventListener('input', (e) => {
                 cBtn.style.display = e.target.value ? 'block' : 'none';
                 clearTimeout(sT);
@@ -1009,7 +970,7 @@
                     }
                 }
 
-                aceStreamMap = await AceStreamEngine.UIManager.updatePlayerModeUI(); init();
+                aceStreamMap = await AceStreamEngine.init();
                 UIManager.refresh();
             } catch (err) {
                 console.error("Error en carga:", err);
@@ -1020,7 +981,7 @@
                     document.getElementById('noResultsContainer').style.display = 'block';
                 }
             }
-        }        UIManager.updatePlayerModeUI(); init();        window.syncMarker = () => {
+        }        init();        window.syncMarker = () => {
             const marker = document.getElementById('real-time-marker');
             const now = new Date();
             const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
@@ -1085,7 +1046,7 @@
                 const oldAceTimestamp = cacheRaw ? JSON.parse(cacheRaw).timestamp : 0;
                 
                 // El init() de AceStreamEngine ya comprueba sus propios Hashes internamente
-                aceStreamMap = await AceStreamEngine.UIManager.updatePlayerModeUI(); init();
+                aceStreamMap = await AceStreamEngine.init();
                 
                 // Comparamos el timestamp para saber si init() descargó e inyectó canales nuevos
                 const cacheRawNew = localStorage.getItem(STORAGE_CONFIG.CACHE_KEY);
