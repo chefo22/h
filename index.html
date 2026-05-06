@@ -877,72 +877,45 @@
                     this.playBestOrNext(channelName);
                 }
                 this.isLongPress = false;
-            },            async playBestOrNext(channelName) {
-                const matching = aceStreamMap.filter(a => ComparisonEngine.isMatch(channelName, a.name));
+            },            playBestOrNext(channelName) {
+                const matching = aceStreamMap
+                    .filter(a => ComparisonEngine.isMatch(channelName, a.name))
+                    .sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
+
                 if (matching.length === 0) return;
 
+                const normName = ComparisonEngine.normalizeText(getCanonicalName(channelName));
+                const lastIdxKey = 'last_idx_' + normName;
+                const lastTimeKey = 'last_ts_' + normName;
+                
+                const lastIndex = parseInt(localStorage.getItem(lastIdxKey)) || 0;
+                const lastTimestamp = parseInt(localStorage.getItem(lastTimeKey)) || 0;
+                const now = Date.now();
+
+                let nextIndex;
+                // Si han pasado más de 15 minutos (900.000 ms), reseteamos al mejor (índice 0)
+                if (now - lastTimestamp > 900000) {
+                    nextIndex = 0;
+                } else {
+                    // Si es un clic rápido (reintento), pasamos al siguiente
+                    nextIndex = (lastIndex + 1) % matching.length;
+                }
+                
+                localStorage.setItem(lastIdxKey, nextIndex);
+                localStorage.setItem(lastTimeKey, now);
+                RatingEngine.trackStart(matching[nextIndex].id, getCanonicalName(channelName), nextIndex);
+
                 const mode = localStorage.getItem('player_mode') || 'external';
-                const canon = getCanonicalName(channelName);
-                let selectedItem;
-
                 if (mode === 'internal') {
-                    // MODO INTELIGENTE: Consulta al motor para encontrar el enlace con más Peers/Salud
-                    this.status.style.display = 'flex';
-                    this.status.innerHTML = `<div style="background:rgba(0,0,0,0.85); padding:15px; border-radius:12px; text-align:center; border:1px solid var(--accent-blue);">
-                        <div class="spinner" style="width:24px; height:24px; margin:0 auto 10px;"></div>
-                        <span style="font-size:0.7rem; color:white; font-weight:700; letter-spacing:0.5px;">ANALIZANDO SEÑALES...</span>
-                    </div>`;
-
-                    // Seleccionamos los 3 mejores por rating histórico para testear
-                    const candidates = matching.sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id)).slice(0, 3);
-                    
-                    try {
-                        const stats = await Promise.all(candidates.map(async (item) => {
-                            try {
-                                // Intentamos obtener info del stream sin iniciarlo completamente
-                                const controller = new AbortController();
-                                setTimeout(() => controller.abort(), 1500);
-                                const resp = await fetch(`http://127.0.0.1:6878/ace/get_stream_info?id=${item.id}`, { signal: controller.signal });
-                                const info = await resp.json();
-                                return { ...item, score: (info.result?.peers || 0) * 10 + (info.result?.quality || 0) };
-                            } catch (e) { 
-                                return { ...item, score: RatingEngine.getScore(item.id) }; 
-                            }
-                        }));
-                        selectedItem = stats.sort((a, b) => b.score - a.score)[0];
-                    } catch (err) {
-                        selectedItem = candidates[0];
-                    } finally {
-                        this.status.style.display = 'none';
-                    }
+                    this.openInternalPlayer(matching[nextIndex].id, getCanonicalName(channelName));
                 } else {
-                    // MODO CLÁSICO: Basado en Rating y Rotación (Útil para apps externas)
-                    const sorted = matching.sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
-                    const normName = ComparisonEngine.normalizeText(canon);
-                    const lastIdxKey = 'last_idx_' + normName;
-                    const lastTimeKey = 'last_ts_' + normName;
-                    const lastIndex = parseInt(localStorage.getItem(lastIdxKey)) || 0;
-                    const lastTimestamp = parseInt(localStorage.getItem(lastTimeKey)) || 0;
-                    const now = Date.now();
-
-                    let nextIndex = (now - lastTimestamp > 900000) ? 0 : (lastIndex + 1) % sorted.length;
-                    localStorage.setItem(lastIdxKey, nextIndex);
-                    localStorage.setItem(lastTimeKey, now);
-                    selectedItem = sorted[nextIndex];
+                    location.href = 'acestream://' + matching[nextIndex].id;
                 }
-
-                RatingEngine.trackStart(selectedItem.id, canon);
-                if (mode === 'internal') {
-                    this.openInternalPlayer(selectedItem.id, canon);
-                } else {
-                    location.href = 'acestream://' + selectedItem.id;
-                }
-            },
-
-            openIdsModal(event, channelName) {
+            },            async openIdsModal(event, channelName) {
                 event.stopPropagation();
                 const list = document.getElementById('ids-list');
                 const title = document.getElementById('modal-title');
+                const isInternal = (localStorage.getItem('player_mode') || 'external') === 'internal';
                 
                 const matching = aceStreamMap
                     .filter(a => ComparisonEngine.isMatch(channelName, a.name))
@@ -957,12 +930,21 @@
                     if (pending && pending.id === item.id) {
                         currentRating = Math.max(0.0, currentRating - 1.5);
                     }
+                    
                     const btn = document.createElement('div');
-                    btn.className = 'id-item';                    btn.innerHTML = `
-                        <small style="flex: 1; text-align: left; color: var(--text-muted); font-size: 0.6rem; font-weight: 700; opacity: 0.6; letter-spacing: 0.5px;">${item.source || 'ID'}</small>
-                        <span style="flex: 2; text-align: center; font-family: monospace; opacity: 0.9;">${item.id.substring(0, 10).toUpperCase()}</span>
-                        <span class="id-rating" style="flex: 1; text-align: right;">★ ${currentRating.toFixed(1)}</span>
-                    `;                    btn.onclick = () => {
+                    btn.className = 'id-item';
+                    btn.innerHTML = `
+                        <div style="display:flex; flex-direction:column; align-items:flex-start; flex:1.2;">
+                            <small style="color: var(--text-muted); font-size: 0.55rem; font-weight: 700; opacity: 0.6; text-transform:uppercase;">${item.source || 'ID'}</small>
+                            <span style="font-family: monospace; font-size:0.7rem; opacity:0.8;">${item.id.substring(0, 10).toUpperCase()}</span>
+                        </div>
+                        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <span class="id-rating" style="font-size:0.75rem;">★ ${currentRating.toFixed(1)}</span>
+                            ${isInternal ? `<span id="peers-${item.id}" style="font-size:0.55rem; color:var(--accent-blue); font-weight:600; opacity:0.7;">buscando...</span>` : ''}
+                        </div>
+                    `;
+                    
+                    btn.onclick = () => {
                         RatingEngine.trackStart(item.id, getCanonicalName(channelName), i);
                         const mode = localStorage.getItem('player_mode') || 'external';
                         if (mode === 'internal') {
@@ -973,6 +955,24 @@
                         }
                     };
                     list.appendChild(btn);
+
+                    // Extracción de metadata en tiempo real si el modo interno está activo
+                    if (isInternal) {
+                        fetch(`http://127.0.0.1:6878/ace/get_stat?id=${item.id}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                const pElem = document.getElementById(`peers-${item.id}`);
+                                if (pElem && data.response) {
+                                    const peers = data.response.peers || 0;
+                                    pElem.textContent = `${peers} PEERS`;
+                                    if (peers > 0) pElem.style.opacity = "1";
+                                    if (peers > 40) pElem.style.color = "#00ff88";
+                                }
+                            }).catch(() => {
+                                const pElem = document.getElementById(`peers-${item.id}`);
+                                if (pElem) pElem.textContent = "OFFLINE";
+                            });
+                    }
                 });
                 this.modal.style.display = 'flex';
             },            closeModal() { this.modal.style.display = 'none'; },
