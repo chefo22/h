@@ -559,18 +559,19 @@
                 handle.onmousedown = dragStart;
                 handle.ontouchstart = dragStart;
 
-                const video = document.getElementById('internal-video');
-
-                // Lógica de Auto-salto si no reproduce en 3 segundos
+                const video = document.getElementById('internal-video');                // Lógica de Auto-salto: Si no reproduce en 3 segundos, salta al siguiente ID
                 if (window._retryTimer) clearTimeout(window._retryTimer);
                 window._retryTimer = setTimeout(() => {
                     if (video && (video.paused || video.readyState < 3 || video.currentTime === 0)) {
-                        console.log("Auto-skip: El canal no carga, intentando siguiente...");
-                        if (video._hls) video._hls.destroy();
+                        console.log("Auto-skip: El enlace no responde, probando el siguiente...");
+                        if (video._hls) {
+                            video._hls.detachMedia();
+                            video._hls.destroy();
+                        }
                         el.remove();
-                        this.playBestOrNext(name);
+                        this.playBestOrNext(name, true);
                     }
-                }, 3500);
+                }, 3000);
 
                 video.onplaying = () => {
                     clearTimeout(window._retryTimer);
@@ -883,7 +884,7 @@
                     this.playBestOrNext(channelName);
                 }
                 this.isLongPress = false;
-            },            playBestOrNext(channelName) {
+            },            playBestOrNext(channelName, isRetry = false) {
                 const matching = aceStreamMap
                     .filter(a => ComparisonEngine.isMatch(channelName, a.name))
                     .sort((a, b) => RatingEngine.getScore(b.id) - RatingEngine.getScore(a.id));
@@ -899,12 +900,17 @@
                 const now = Date.now();
 
                 let nextIndex;
-                // Si han pasado más de 15 minutos (900.000 ms), reseteamos al mejor (índice 0)
-                if (now - lastTimestamp > 900000) {
-                    nextIndex = 0;
-                } else {
-                    // Si es un clic rápido (reintento), pasamos al siguiente
+                // Si es un reintento automático o manual rápido, incrementamos el índice
+                if (isRetry || (now - lastTimestamp < 900000)) {
                     nextIndex = (lastIndex + 1) % matching.length;
+                    // Si hemos dado la vuelta completa y vuelve al 0 en un reintento, paramos el bucle
+                    if (isRetry && nextIndex === 0) {
+                        console.log("Todos los enlaces probados para: " + channelName);
+                        return;
+                    }
+                } else {
+                    // Reset al mejor tras 15 min de inactividad
+                    nextIndex = 0;
                 }
                 
                 localStorage.setItem(lastIdxKey, nextIndex);
