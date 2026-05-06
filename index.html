@@ -526,7 +526,9 @@
                 const playerHtml = `
                     <div id="internal-player-container" style="position:fixed;top:20px;right:20px;width:320px;background:#000;z-index:9999;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.8);border:1px solid #444;touch-action:none;transition: box-shadow 0.3s ease;">
                         <div id="player-handle" style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;border-bottom:1px solid #333;cursor:move;user-select:none;">
-                            <span style="font-size:0.7rem;font-weight:bold;color:var(--accent-blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px;pointer-events:none;">${name}</span>
+                            <div style="display:flex;align-items:center;pointer-events:none;height:22px;">
+                                ${channelLogosMap[getCanonicalName(name)] ? `<img src="${channelLogosMap[getCanonicalName(name)]}" style="height:100%;max-width:100px;object-fit:contain;filter:drop-shadow(0 0 2px rgba(0,0,0,0.5));">` : `<span style="font-size:0.7rem;font-weight:bold;color:var(--accent-blue);">${name}</span>`}
+                            </div>
                             <button onclick="const p=document.getElementById('internal-player-container'); if(p){const v=p.querySelector('video'); if(v&&v._hls)v._hls.destroy(); p.remove();}" style="background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;line-height:1;">&times;</button>
                         </div>
                         <video id="internal-video" autoplay controls style="width:100%;aspect-ratio:16/9;background:#000;display:block;"></video>
@@ -560,12 +562,19 @@
                     document.onmousemove = null; document.onmouseup = null;
                     document.ontouchmove = null; document.ontouchend = null;
                     el.style.boxShadow = "0 10px 30px rgba(0,0,0,0.8)";
-                };
-
-                handle.onmousedown = dragStart;
+                };                handle.onmousedown = dragStart;
                 handle.ontouchstart = dragStart;
 
                 const video = document.getElementById('internal-video');
+
+                // Gestión de visibilidad en modo Picture-in-Picture
+                video.addEventListener('enterpictureinpicture', () => {
+                    el.style.display = 'none';
+                });
+                video.addEventListener('leavepictureinpicture', () => {
+                    el.style.display = 'flex';
+                });
+
                 const streamUrl = `http://127.0.0.1:6878/ace/manifest.m3u8?id=${id}`;
 
                 try {
@@ -928,10 +937,15 @@
                         <small style="flex: 1; text-align: left; color: var(--text-muted); font-size: 0.6rem; font-weight: 700; opacity: 0.6; letter-spacing: 0.5px;">${item.source || 'ID'}</small>
                         <span style="flex: 2; text-align: center; font-family: monospace; opacity: 0.9;">${item.id.substring(0, 10).toUpperCase()}</span>
                         <span class="id-rating" style="flex: 1; text-align: right;">★ ${currentRating.toFixed(1)}</span>
-                    `;
-                    btn.onclick = () => {
+                    `;                    btn.onclick = () => {
                         RatingEngine.trackStart(item.id, getCanonicalName(channelName), i);
-                        window.location.href = `acestream://${item.id}`;
+                        const mode = localStorage.getItem('player_mode') || 'external';
+                        if (mode === 'internal') {
+                            UIManager.openInternalPlayer(item.id, getCanonicalName(channelName));
+                            UIManager.closeModal();
+                        } else {
+                            window.location.href = `acestream://${item.id}`;
+                        }
                     };
                     list.appendChild(btn);
                 });
