@@ -161,7 +161,7 @@
             line-height: 1.8; color: #cbd5e1;
         }
         .reader-content h1, .reader-content h2 { color: var(--text-main); line-height: 1.2; }
-        .reader-content img { max-width: 100%; border-radius: 12px; margin: 1.5rem 0; }
+        .reader-content img { max-width: 100%; max-height: 60vh; width: auto; display: block; margin: 1.5rem auto; border-radius: 12px; object-fit: contain; }
         .reader-content a { color: var(--primary); }
         .btn-back { background: var(--card-bg); border: 1px solid var(--border); color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
     </style>
@@ -407,31 +407,94 @@
         bar.innerHTML = `<div class="filter-chip ${currentFilter==='none'?'active':''}" onclick="setF('none')">Todo</div>
                          <div class="filter-chip ${currentFilter==='favs'?'active':''}" onclick="setF('favs')">Mis Temas</div>` +
                          tags.map(t => `<div class="filter-chip ${currentFilter===t?'active':''}" onclick="setF('${t}')">${t}</div>`).join('');
-    }    function setF(val) { currentFilter = val; loadNews(); }
-
-    async function openReader(url, source) {
+    }    function setF(val) { currentFilter = val; loadNews(); }    async function openReader(url, source) {
         const reader = document.getElementById('reader');
         const content = document.getElementById('readerContent');
         const original = document.getElementById('originalLink');
         
         document.body.style.overflow = 'hidden';
         reader.style.display = 'flex';
-        content.innerHTML = '<div class="loading-msg"><h3>Extrayendo contenido...</h3><p>La IA está limpiando la publicidad y el ruido por ti.</p></div>';
+        content.innerHTML = '<div class="loading-msg"><h3>Limpiando artículo...</h3><p>Eliminando menús de Motorsport, publicidad y ruido visual.</p></div>';
         original.href = url;
         
         try {
             const res = await fetch(`https://r.jina.ai/${url}`);
             const text = await res.text();
             
-            // Conversión básica de Markdown Jina a HTML
-            let html = text
+            const lines = text.split('\n');
+            let cleanLines = [];
+            let contentStarted = false;
+            let contentEnded = false;
+            
+            const menuTerms = ['noticias', 'calendario', 'resultados', 'clasificación', 'fotogalerías', 'videos', 'pilotos', 'equipos', 'f1 academy', 'nascar cup', 'imsa', 's-cer', 'esports'];
+            const junkPatterns = [
+                'cookie', 'privacidad', 'términos', 'publicidad', 'newsletter', 'suscríbete', 'iniciar sesión', 
+                'copyright', 'hearst', 'todos los derechos', 'aviso legal', 'sitemap', 'skip to content', 
+                'gestionar configuración', 'rechazar aceptar', 'regístrate gratis', 'accede rápidamente', 
+                'haz que tu voz', 'edición', 'enlaces destacados', 'comparte o guarda', 'artículo anterior', 
+                'siguiente artículo', 'mejores comentarios', 'leer y enviar', 'encuesta de 5 minutos', 
+                'descarga tus aplicaciones', 'en redes sociales', 'contáctanos', 'new york, ny', 'usa', 
+                'adblocker', 'suscribirse', 'ya estás suscrito', 'añadir como fuente', 'foto de:', 'editado:', 'publicado:'
+            ];
+
+            for (let line of lines) {
+                if (contentEnded) break;
+                const trimmed = line.trim();
+                const lower = trimmed.toLowerCase();
+                if (!trimmed) continue;
+
+                // 1. Detección de fin del artículo
+                if (line.startsWith('## ') && (lower.includes('comentarios') || lower.includes('últimas noticias') || lower.includes('también puedes leer'))) {
+                    contentEnded = true;
+                    continue;
+                }
+                if (lower.includes('¿qué le gustaría ver en motorsport.com?')) {
+                    contentEnded = true;
+                    continue;
+                }
+
+                // 2. Detectar inicio real (Título principal)
+                if (!contentStarted && line.startsWith('# ')) {
+                    // Evitar títulos de sección como "# Categorías"
+                    if (lower.length > 20 && !menuTerms.some(term => lower.includes(term))) {
+                        contentStarted = true;
+                    }
+                }
+
+                if (contentStarted) {
+                    // 3. Filtrado agresivo de listas de menús repetitivos
+                    if (line.startsWith('* ') && (line.includes('[') || menuTerms.some(term => lower.includes(term)))) continue;
+                    
+                    // 4. Filtrar líneas que son solo números sueltos (como "0") o caracteres de adorno
+                    if (/^\d+$/.test(trimmed)) continue;
+                    if (trimmed === '#' || trimmed === '***' || trimmed === '---') continue;
+
+                    // 5. Filtrar migas de pan y palabras de UI
+                    if (/^\d+\.\s+home/i.test(lower) || lower === 'buscar') continue;
+                    
+                    // 6. Filtrar por lista negra de basura
+                    if (junkPatterns.some(p => lower.includes(p))) continue;                    // 7. Evitar bloques de redes sociales e iconos de marcas
+                    const social = ['facebook', 'twitter', 'whatsapp', 'linkedin', 'viber', 'pinterest', 'instagram', 'youtube', 'rss'];
+                    if (social.some(s => lower.includes(s))) continue;
+                    if (line.includes('![Image') && (lower.includes('logo') || lower.includes('icon') || lower.includes('avatar'))) continue;
+
+                    cleanLines.push(line);
+                }
+            }
+
+            const processedText = cleanLines.length > 5 ? cleanLines.join('\n') : text;
+
+            let html = processedText
                 .replace(/# (.*)/g, '<h1>$1</h1>')
                 .replace(/## (.*)/g, '<h2>$1</h2>')
-                .replace(/\!\[.*?\]\((.*?)\)/g, '<img src="$1">')
+                .replace(/### (.*)/g, '<h3>$1</h3>')
+                .replace(/\!\s*\[.*?\]\((.*?)\)/g, '<img src="$1" loading="lazy">')
                 .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n\n/g, '</p><p>')
                 .replace(/\n/g, '<br>');
             
-            content.innerHTML = `<h1>${source}</h1><hr style="border:0; border-top:1px solid var(--border); margin:20px 0;">${html}`;
+            content.innerHTML = `<div style="font-size:0.75rem; color:var(--primary); margin-bottom:10px; font-weight:700;">MODO LECTURA: ${source}</div><hr style="border:0; border-top:1px solid var(--border); margin:20px 0;"><p>${html}</p>`;
         } catch(e) {
             content.innerHTML = "<h3>Error al cargar</h3><p>No se pudo extraer el contenido. Prueba el enlace original arriba.</p>";
         }
