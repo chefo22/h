@@ -164,6 +164,11 @@
         .reader-content img { max-width: 100%; max-height: 60vh; width: auto; display: block; margin: 1.5rem auto; border-radius: 12px; object-fit: contain; }
         .reader-content a { color: var(--primary); }
         .btn-back { background: var(--card-bg); border: 1px solid var(--border); color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+        /* Estilos para tablas en modo lectura */
+        .reader-content table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.85rem; background: rgba(255,255,255,0.02); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+        .reader-content th, .reader-content td { padding: 12px; border: 1px solid var(--border); text-align: left; }
+        .reader-content th { background: rgba(99, 102, 241, 0.15); color: var(--primary); font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
+        .reader-content tr:nth-child(even) { background: rgba(255,255,255,0.01); }
     </style>
 </head>
 <body>
@@ -415,27 +420,22 @@
         document.body.style.overflow = 'hidden';
         reader.style.display = 'flex';
         content.innerHTML = '<div class="loading-msg"><h3>Limpiando artículo...</h3><p>Eliminando menús de Motorsport, publicidad y ruido visual.</p></div>';
-        original.href = url;
-        
-        try {
+        original.href = url;        try {
             const res = await fetch(`https://r.jina.ai/${url}`);
             const text = await res.text();
             
             const lines = text.split('\n');
             let cleanLines = [];
             let contentStarted = false;
-            let contentEnded = false;
-            
-            const menuTerms = ['noticias', 'calendario', 'resultados', 'clasificación', 'fotogalerías', 'videos', 'pilotos', 'equipos', 'f1 academy', 'nascar cup', 'imsa', 's-cer', 'esports'];
+            let contentEnded = false;            const menuTerms = ['noticias', 'calendario', 'resultados', 'clasificación', 'fotogalerías', 'videos', 'pilotos', 'equipos', 'f1 academy', 'nascar cup', 'imsa', 's-cer', 'esports', 'fórmula e', 'categorías', 'moto2', 'moto3', 'wsbk', 'rally raid', 'alonso', 'márquez', 'apuestas', 'etapa', 'fia f2', 'fia f3', 'todos', 'temas', 'españa', 'latinoamérica'];
             const junkPatterns = [
                 'cookie', 'privacidad', 'términos', 'publicidad', 'newsletter', 'suscríbete', 'iniciar sesión', 
                 'copyright', 'hearst', 'todos los derechos', 'aviso legal', 'sitemap', 'skip to content', 
                 'gestionar configuración', 'rechazar aceptar', 'regístrate gratis', 'accede rápidamente', 
                 'haz que tu voz', 'edición', 'enlaces destacados', 'comparte o guarda', 'artículo anterior', 
                 'siguiente artículo', 'mejores comentarios', 'leer y enviar', 'encuesta de 5 minutos', 
-                'descarga tus aplicaciones', 'en redes sociales', 'contáctanos', 'new york, ny', 'usa', 
-                'adblocker', 'suscribirse', 'ya estás suscrito', 'añadir como fuente', 'foto de:', 'editado:', 'publicado:'
-            ];
+                'descarga tus aplicaciones', 'en redes sociales', 'contáctanos', 'adblocker', 'suscribirse', 
+                'foto de:', 'editado:', 'publicado:', 'copiar enlace', 'participa', 'todos los campeonatos', 'enlaces rápidos', 'ir al contenido principal', 'modo lectura', 'volver', '🌐'];
 
             for (let line of lines) {
                 if (contentEnded) break;
@@ -443,7 +443,6 @@
                 const lower = trimmed.toLowerCase();
                 if (!trimmed) continue;
 
-                // 1. Detección de fin del artículo
                 if (line.startsWith('## ') && (lower.includes('comentarios') || lower.includes('últimas noticias') || lower.includes('también puedes leer'))) {
                     contentEnded = true;
                     continue;
@@ -451,40 +450,58 @@
                 if (lower.includes('¿qué le gustaría ver en motorsport.com?')) {
                     contentEnded = true;
                     continue;
-                }
-
-                // 2. Detectar inicio real (Título principal)
+                }                
                 if (!contentStarted && line.startsWith('# ')) {
-                    // Evitar títulos de sección como "# Categorías"
-                    if (lower.length > 20 && !menuTerms.some(term => lower.includes(term))) {
-                        contentStarted = true;
-                    }
+                    const isJunkTitle = junkPatterns.some(p => lower.includes(p)) || menuTerms.some(t => lower === t);
+                    if (lower.length > 15 && !isJunkTitle) contentStarted = true;
                 }
 
                 if (contentStarted) {
-                    // 3. Filtrado agresivo de listas de menús repetitivos
-                    if (line.startsWith('* ') && (line.includes('[') || menuTerms.some(term => lower.includes(term)))) continue;
-                    
-                    // 4. Filtrar líneas que son solo números sueltos (como "0") o caracteres de adorno
-                    if (/^\d+$/.test(trimmed)) continue;
-                    if (trimmed === '#' || trimmed === '***' || trimmed === '---') continue;
-
-                    // 5. Filtrar migas de pan y palabras de UI
-                    if (/^\d+\.\s+home/i.test(lower) || lower === 'buscar') continue;
-                    
-                    // 6. Filtrar por lista negra de basura
-                    if (junkPatterns.some(p => lower.includes(p))) continue;                    // 7. Evitar bloques de redes sociales e iconos de marcas
-                    const social = ['facebook', 'twitter', 'whatsapp', 'linkedin', 'viber', 'pinterest', 'instagram', 'youtube', 'rss'];
+                    const isMenuLine = menuTerms.some(term => lower.includes(term));
+                    const isList = line.startsWith('* ') || line.startsWith('- ');
+                    if (isMenuLine || (isList && line.length < 60)) continue;
+                    if (line.startsWith('# ') && cleanLines.some(l => l.includes(line.substring(2)))) continue;
+                    if (/^\d+$/.test(trimmed) || trimmed === '#' || trimmed === '***' || trimmed === '---' || trimmed === '##') continue;
+                    if (junkPatterns.some(p => lower.includes(p))) continue;
+                    const social = ['facebook', 'twitter', 'whatsapp', 'linkedin', 'viber', 'pinterest', 'instagram', 'youtube', 'rss', 'copiar enlace'];
                     if (social.some(s => lower.includes(s))) continue;
-                    if (line.includes('![Image') && (lower.includes('logo') || lower.includes('icon') || lower.includes('avatar'))) continue;
-
+                    if (line.includes('![Image') && (lower.includes('logo') || lower.includes('icon') || lower.includes('avatar') || lower.includes('bandera'))) continue;
                     cleanLines.push(line);
                 }
-            }
+            }            
+            
+            // Si no se pudo limpiar adecuadamente, lanzamos error para usar el iframe
+            if (cleanLines.length < 5) throw new Error("Contenido insuficiente");
+            
+            const processedText = cleanLines.join('\n');
+            let html = processedText;
 
-            const processedText = cleanLines.length > 5 ? cleanLines.join('\n') : text;
+            // --- PROCESADOR DE TABLAS MARKDOWN ---
+            const tableRegex = /((?:\|.*\|(?:\n|\r\n?))+)/g;
+            html = html.replace(tableRegex, (match) => {
+                const rows = match.trim().split('\n').filter(r => r.includes('|'));
+                if (rows.length < 2) return match;
+                
+                let tableHtml = '<table><thead>';
+                let bodyStarted = false;
 
-            let html = processedText
+                rows.forEach((row, idx) => {
+                    if (row.includes('---|') || row.includes(':---|')) return;
+                    
+                    const cols = row.split('|').filter((c, i, arr) => i > 0 && i < arr.length - 1).map(c => c.trim());
+                    const tag = (!bodyStarted && idx === 0) ? 'th' : 'td';
+                    
+                    tableHtml += '<tr>' + cols.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+                    
+                    if (idx === 0) {
+                        tableHtml += '</thead><tbody>';
+                        bodyStarted = true;
+                    }
+                });
+                return tableHtml + '</tbody></table>';
+            });
+
+            html = html
                 .replace(/# (.*)/g, '<h1>$1</h1>')
                 .replace(/## (.*)/g, '<h2>$1</h2>')
                 .replace(/### (.*)/g, '<h3>$1</h3>')
@@ -494,9 +511,14 @@
                 .replace(/\n\n/g, '</p><p>')
                 .replace(/\n/g, '<br>');
             
-            content.innerHTML = `<div style="font-size:0.75rem; color:var(--primary); margin-bottom:10px; font-weight:700;">MODO LECTURA: ${source}</div><hr style="border:0; border-top:1px solid var(--border); margin:20px 0;"><p>${html}</p>`;
-        } catch(e) {
-            content.innerHTML = "<h3>Error al cargar</h3><p>No se pudo extraer el contenido. Prueba el enlace original arriba.</p>";
+            content.innerHTML = `<div style="font-size:0.75rem; color:var(--primary); margin-bottom:10px; font-weight:700;">MODO LECTURA: ${source}</div><hr style="border:0; border-top:1px solid var(--border); margin:20px 0;"><p>${html}</p>`;        } catch(e) {
+            content.innerHTML = `
+                <div style="height: calc(100vh - 150px); display: flex; flex-direction: column;">
+                    <div style="padding: 10px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; color: var(--primary); font-size: 0.8rem; margin-bottom: 15px; text-align: center; border: 1px solid var(--border);">
+                        <i class="fas fa-info-circle"></i> El modo lectura optimizado no está disponible. Mostrando sitio original dentro de Insight News.
+                    </div>
+                    <iframe src="${url}" style="flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 12px; background: white;" allowfullscreen></iframe>
+                </div>`;
         }
     }
 
