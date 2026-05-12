@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reparador de MP3</title>
-    <!-- Tailwind CSS para los estilos visuales -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librerías de FFmpeg para navegador -->
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     <style>
         .loader {
             border-top-color: #3b82f6;
@@ -25,7 +23,7 @@
     <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
         <h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">Reparador de MP3</h1>
         <p class="text-sm text-gray-600 mb-6 text-center">
-            Reconstruye el índice de duración de tu archivo sin recodificar ni perder calidad. Todo ocurre en tu navegador, sin subir archivos a internet.
+            Reconstruye el índice de duración de tu archivo sin recodificar ni perder calidad.
         </p>
         
         <input type="file" id="fileInput" accept=".mp3" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer"/>
@@ -43,7 +41,6 @@
             Descargar MP3 Reparado
         </a>
 
-        <!-- Registro de operaciones (Log) -->
         <div class="mt-6 bg-gray-900 rounded-lg p-3 h-32 overflow-y-auto hidden" id="logContainer">
             <p class="text-xs text-green-400 font-mono break-words" id="log"></p>
         </div>
@@ -51,7 +48,7 @@
 
     <script>
         const { FFmpeg } = FFmpegWASM;
-        const { fetchFile } = FFmpegUtil;
+        const { fetchFile, toBlobURL } = FFmpegUtil;
         let ffmpeg = null;
 
         async function initFFmpeg() {
@@ -59,17 +56,17 @@
             ffmpeg = new FFmpeg();
             const logEl = document.getElementById('log');
             
-            // Imprimir el registro interno de FFmpeg en la pantalla
             ffmpeg.on('log', ({ message }) => {
                 logEl.innerHTML += message + '<br>';
                 logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
             });
             
-            // Cargar el núcleo single-thread para máxima compatibilidad web
-            const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+            
+            // Aquí está el parche: convertimos los scripts externos en Blobs locales para burlar el bloqueo CORS de GitHub Pages
             await ffmpeg.load({
-                coreURL: `${baseURL}/ffmpeg-core.js`,
-                wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
             });
         }
 
@@ -88,7 +85,6 @@
             const logContainer = document.getElementById('logContainer');
             const spinner = document.getElementById('spinner');
             
-            // Reiniciar UI
             startBtn.disabled = true;
             startBtn.classList.add('opacity-50', 'cursor-not-allowed');
             loadingDiv.classList.remove('hidden');
@@ -100,14 +96,13 @@
             document.getElementById('log').innerHTML = '';
             
             try {
-                statusEl.innerText = 'Cargando motor de procesamiento...';
+                statusEl.innerText = 'Cargando motor de procesamiento (puede tardar la primera vez)...';
                 await initFFmpeg();
                 
-                statusEl.innerText = 'Leyendo archivo (esto consume RAM temporal)...';
+                statusEl.innerText = 'Leyendo archivo (consumiendo RAM temporal)...';
                 await ffmpeg.writeFile('input.mp3', await fetchFile(file));
                 
                 statusEl.innerText = 'Reparando metadatos e índices de tiempo...';
-                // -c copy reconstruye el encabezado Xing/VBR sin alterar la calidad del audio
                 await ffmpeg.exec(['-i', 'input.mp3', '-c', 'copy', 'output.mp3']);
                 
                 statusEl.innerText = 'Preparando archivo final...';
@@ -122,7 +117,6 @@
                 spinner.classList.add('hidden');
                 statusEl.classList.replace('text-blue-600', 'text-green-600');
                 
-                // Limpiar memoria interna
                 await ffmpeg.deleteFile('input.mp3');
                 await ffmpeg.deleteFile('output.mp3');
                 
