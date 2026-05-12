@@ -3,547 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Insight News | Premium Reader</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>Reparador de MP3</title>
+    <!-- Tailwind CSS para los estilos visuales -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerías de FFmpeg para navegador -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     <style>
-        :root {
-            --primary: #6366f1;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #334155;
-            --radius: 16px;
+        .loader {
+            border-top-color: #3b82f6;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
         }
-
-        * { box-sizing: border-box; transition: all 0.2s ease; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            margin: 0;
-            line-height: 1.5;
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-
-        /* --- HEADER --- */
-        header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem 5%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .brand { font-weight: 800; font-size: 1.4rem; letter-spacing: -0.5px; color: var(--primary); }
-        
-        .icon-btn {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            padding: 10px;
-            border-radius: 12px;
-            cursor: pointer;
-            color: var(--text-main);
-        }
-
-        /* --- GRID --- */
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 5%; }
-        
-        .filter-bar {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 2rem;
-            overflow-x: auto;
-            padding: 10px 0;
-            scrollbar-width: none;
-        }
-        .filter-bar::-webkit-scrollbar { display: none; }
-
-        .filter-chip {
-            padding: 8px 18px;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 100px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            white-space: nowrap;
-            color: var(--text-muted);
-        }
-        .filter-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
-
-        .news-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 2rem;
-        }
-
-        .post-card {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            overflow: hidden;
-            text-decoration: none;
-            color: inherit;
-            display: flex;
-            flex-direction: column;
-        }
-        .post-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-
-        .post-thumb-wrapper { width: 100%; aspect-ratio: 16/9; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
-.post-thumb-blur { position: absolute; inset: -15px; background-size: cover; background-position: center; filter: blur(20px) saturate(1.8) brightness(0.7); transform: scale(1.1); z-index: 1; }
-.post-thumb-overlay { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0)); backdrop-filter: blur(2px) contrast(1.1); z-index: 2; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.post-thumb-main { position: relative; max-width: 100%; max-height: 100%; object-fit: contain; z-index: 3; drop-shadow: 0 10px 20px rgba(0,0,0,0.5); }
-        .post-body { padding: 1.5rem; flex-grow: 1; }
-        .post-source { font-size: 0.7rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 5px; display: block; }
-        .post-title { font-size: 1.1rem; font-weight: 600; margin: 0; line-height: 1.3; }
-
-        /* --- MODAL --- */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(4px);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal {
-            background: #1e293b;
-            width: 90%;
-            max-width: 500px;
-            border-radius: 24px;
-            padding: 2rem;
-            border: 1px solid var(--border);
-        }
-
-        .input-group {
-            display: flex;
-            gap: 8px;
-            margin-top: 1rem;
-            background: #0f172a;
-            padding: 6px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-        }
-        input { background: transparent; border: none; padding: 10px; flex: 1; color: white; outline: none; }
-        
-        .btn-add { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 10px; cursor: pointer; font-weight: 600; }
-        
-        .list-area { margin-top: 1rem; max-height: 140px; overflow-y: auto; }
-        .item-pill {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #2d3748; padding: 8px 12px; border-radius: 10px; margin-bottom: 6px; font-size: 0.8rem;
-        }
-        .del-btn { color: #ef4444; cursor: pointer; font-weight: bold; padding: 0 5px; }
-
-        .btn-close {
-            width: 100%; margin-top: 1.5rem; padding: 12px; border-radius: 12px; border: none; 
-            background: white; color: black; font-weight: 700; cursor: pointer;
-        }        .loading-msg { text-align: center; grid-column: 1/-1; padding: 4rem; color: var(--text-muted); }
-
-        /* --- READER VIEW --- */
-        .reader-view {
-            position: fixed; inset: 0; background: var(--bg); z-index: 2000;
-            display: none; flex-direction: column; overflow-y: auto;
-        }
-        .reader-header {
-            position: sticky; top: 0; background: rgba(30, 41, 59, 0.9); backdrop-filter: blur(10px);
-            padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--border);
-        }
-        .reader-content {
-            max-width: 800px; margin: 0 auto; padding: 2rem 5%; font-size: 1.1rem;
-            line-height: 1.8; color: #cbd5e1;
-        }
-        .reader-content h1, .reader-content h2 { color: var(--text-main); line-height: 1.2; }
-        .reader-content img { max-width: 100%; max-height: 60vh; width: auto; display: block; margin: 1.5rem auto; border-radius: 12px; object-fit: contain; }
-        .reader-content a { color: var(--primary); }
-        .btn-back { background: var(--card-bg); border: 1px solid var(--border); color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
-        /* Estilos para tablas en modo lectura */
-        .reader-content table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.85rem; background: rgba(255,255,255,0.02); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-        .reader-content th, .reader-content td { padding: 12px; border: 1px solid var(--border); text-align: left; }
-        .reader-content th { background: rgba(99, 102, 241, 0.15); color: var(--primary); font-weight: 700; text-transform: uppercase; font-size: 0.75rem; }
-        .reader-content tr:nth-child(even) { background: rgba(255,255,255,0.01); }
     </style>
 </head>
-<body>
-
-<header>
-    <div class="brand">INSIGHT NEWS</div>
-    <button class="icon-btn" onclick="toggleModal()">⚙️</button>
-</header>
-
-<main class="container">
-    <div id="filterBar" class="filter-bar"></div>
-    <div id="feed" class="news-grid"></div>
-</main>
-
-
-<div id="reader" class="reader-view">
-    <div class="reader-header">
-        <button class="btn-back" onclick="closeReader()">← Volver</button>
-        <div id="readerSource" style="font-size: 0.8rem; color: var(--primary); font-weight: 700;">MODO LECTURA</div>
-        <a id="originalLink" href="#" target="_blank" class="icon-btn" style="text-decoration:none">🌐</a>
-    </div>
-    <div id="readerContent" class="reader-content"></div>
-</div>
-
-<div id="modal" class="modal-overlay">
-    <div class="modal">
-        <h2 style="margin:0">Configuración</h2>
-        <p style="font-size:0.85rem; color:var(--text-muted)">Añade URLs de medios (ej: motorpasion.com)</p>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">Reparador de MP3</h1>
+        <p class="text-sm text-gray-600 mb-6 text-center">
+            Reconstruye el índice de duración de tu archivo sin recodificar ni perder calidad. Todo ocurre en tu navegador, sin subir archivos a internet.
+        </p>
         
-        <div class="input-group">
-            <input type="text" id="urlIn" placeholder="URL del sitio...">
-            <button class="btn-add" onclick="addNewSource()">Añadir</button>
+        <input type="file" id="fileInput" accept=".mp3" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer"/>
+        
+        <button id="startBtn" onclick="fixAudio()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300">
+            Reparar Archivo
+        </button>
+
+        <div id="loading" class="hidden mt-6 flex flex-col items-center">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mb-3" id="spinner"></div>
+            <p id="status" class="text-sm text-blue-600 font-semibold text-center">Iniciando...</p>
         </div>
-        <div id="status" style="font-size:0.75rem; color:var(--primary); margin:8px 0; min-height: 1em;"></div>
-        
-        <div class="list-area" id="srcList"></div>
 
-        <h3 style="font-size:1rem; margin-top:1.5rem;">Filtros de temas</h3>
-        <div class="input-group">
-            <input type="text" id="tagIn" placeholder="Ej: Alonso, F1, IA...">
-            <button class="btn-add" onclick="addTag()" style="background:#10b981">Añadir</button>
+        <a id="downloadBtn" class="hidden mt-4 w-full block text-center bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition duration-300">
+            Descargar MP3 Reparado
+        </a>
+
+        <!-- Registro de operaciones (Log) -->
+        <div class="mt-6 bg-gray-900 rounded-lg p-3 h-32 overflow-y-auto hidden" id="logContainer">
+            <p class="text-xs text-green-400 font-mono break-words" id="log"></p>
         </div>
-        <div class="list-area" id="tagList"></div>
-
-        <button class="btn-close" onclick="toggleModal()">Cerrar y Actualizar</button>
-        <p onclick="localStorage.clear(); location.reload();" style="text-align:center; color:#ef4444; font-size:0.7rem; margin-top:15px; cursor:pointer;">Borrar toda la configuración</p>
     </div>
-</div>
 
-<script>
-    let feeds = JSON.parse(localStorage.getItem('feeds_v4')) || [];
-    let tags = JSON.parse(localStorage.getItem('tags_v4')) || [];
-    let currentFilter = 'none';
+    <script>
+        const { FFmpeg } = FFmpegWASM;
+        const { fetchFile } = FFmpegUtil;
+        let ffmpeg = null;
 
-    // Lista Maestra de Rutas (Incluye Motorpasión/Webedia)
-    const PATHS = [
-        "",                 // Directo
-        "index.xml",        // Motorpasión, Xataka, Magnet (Webedia)
-        "rss/all/news/",    // Motorsport
-        "rss/all.xml/",     // Car and Driver / Hearst
-        "feed/",            // WordPress
-        "rss/", 
-        "rss.xml"
-    ];
-
-    window.onload = () => { renderSettings(); loadNews(); };
-
-    function toggleModal() {
-        const m = document.getElementById('modal');
-        m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
-    }    async function addNewSource() {
-        const input = document.getElementById('urlIn');
-        const status = document.getElementById('status');
-        let url = input.value.trim().toLowerCase();
-        
-        if(!url) return;
-        if(!url.startsWith('http')) url = 'https://' + url;
-
-        // Detección y formateo para X (Twitter) vía Jina AI
-        if (url.includes('x.com') || url.includes('twitter.com')) {
-            const handle = url.split('/').filter(p => p && !p.includes('?')).pop();
-            const jinaUrl = `https://r.jina.ai/https://x.com/${handle}`;
-            if(!feeds.includes(jinaUrl)) {
-                feeds.push(jinaUrl);
-                localStorage.setItem('feeds_v4', JSON.stringify(feeds));
-                input.value = '';
-                status.innerText = "Cuenta de X añadida correctamente.";
-                renderSettings();
-            } else { status.innerText = "Esta cuenta ya existe."; }
-            return;
+        async function initFFmpeg() {
+            if (ffmpeg) return;
+            ffmpeg = new FFmpeg();
+            const logEl = document.getElementById('log');
+            
+            // Imprimir el registro interno de FFmpeg en la pantalla
+            ffmpeg.on('log', ({ message }) => {
+                logEl.innerHTML += message + '<br>';
+                logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
+            });
+            
+            // Cargar el núcleo single-thread para máxima compatibilidad web
+            const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+            await ffmpeg.load({
+                coreURL: `${baseURL}/ffmpeg-core.js`,
+                wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+            });
         }
-        
-        if(!url.endsWith('/')) url += '/';
-        status.innerText = "Buscando fuente inteligente...";
-        let found = null;
 
-        for(let p of PATHS) {
-            let full = url + p;
-            status.innerText = `Probando: ${p || 'raíz'}`;
+        async function fixAudio() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                alert('Por favor, selecciona un archivo MP3 primero.');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const statusEl = document.getElementById('status');
+            const loadingDiv = document.getElementById('loading');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const startBtn = document.getElementById('startBtn');
+            const logContainer = document.getElementById('logContainer');
+            const spinner = document.getElementById('spinner');
+            
+            // Reiniciar UI
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            loadingDiv.classList.remove('hidden');
+            logContainer.classList.remove('hidden');
+            downloadBtn.classList.add('hidden');
+            spinner.classList.remove('hidden');
+            statusEl.classList.replace('text-green-600', 'text-blue-600');
+            statusEl.classList.replace('text-red-600', 'text-blue-600');
+            document.getElementById('log').innerHTML = '';
+            
             try {
-                const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(full)}`);
-                const json = await res.json();
-                if(json.status === 'ok' && json.items.length > 0) {
-                    found = full;
-                    break;
-                }
-            } catch(e) {}
-        }
-
-        if(found) {
-            if(!feeds.includes(found)) {
-                feeds.push(found);
-                localStorage.setItem('feeds_v4', JSON.stringify(feeds));
-                input.value = '';
-                status.innerText = "¡Fuente detectada!";
-                renderSettings();
-            } else { status.innerText = "Esta fuente ya existe."; }
-        } else {
-            status.innerText = "No se detectó RSS. Prueba con otra URL.";
-        }
-    }    async function loadNews() {
-        const grid = document.getElementById('feed');
-        if(feeds.length === 0) {
-            grid.innerHTML = '<div class="loading-msg"><h3>Sin noticias</h3><p>Añade fuentes en el icono de ajustes.</p></div>';
-            return;
-        }
-
-        grid.innerHTML = '<div class="loading-msg">Sincronizando...</div>';
-        let allPosts = [];
-
-        const jobs = feeds.map(async (url) => {
-            try {
-                if (url.includes('r.jina.ai')) {
-                    const res = await fetch(url);
-                    const text = await res.text();
-                    return parseJinaX(text, url);
-                }
-                const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
-                const data = await res.json();
-                return data.status === 'ok' ? data.items.map(i => ({...i, sName: data.feed.title})) : [];
-            } catch(e) { return []; }
-        });
-
-        const results = await Promise.all(jobs);
-        results.forEach(list => allPosts = allPosts.concat(list));
-        
-        allPosts = [...new Map(allPosts.map(item => [item.link, item])).values()];
-        allPosts.sort((a,b) => new Date(b.pubDate) - new Date(a.pubDate));
-
-        renderGrid(allPosts);
-    }    function parseJinaX(markdown, sourceUrl) {
-        const posts = [];
-        const handle = sourceUrl.split('/').pop();
-        
-        const postSections = markdown.split(/## .*’s posts|## Posts/i);
-        if (postSections.length < 2) return [];
-        
-        const tweetsContent = postSections[1];
-        // Agrupamos por ID de tweet para evitar duplicados por múltiples fotos (/photo/1, /photo/2)
-        const tweetRegex = /\[\!\[Image \d+: Image\]\((.*?)\)\]\((https:\/\/x\.com\/[^\/]+\/status\/(\d+)).*?\)/g;
-        
-        const groups = new Map();
-        let match;
-        while ((match = tweetRegex.exec(tweetsContent)) !== null) {
-            const baseUrl = match[2];
-            if (!groups.has(baseUrl)) {
-                groups.set(baseUrl, {
-                    url: baseUrl,
-                    thumb: match[1],
-                    startIndex: match.index,
-                    endIndex: match.index + match[0].length
-                });
-            } else {
-                // Si el tweet tiene varias imágenes, el texto real empieza tras la última imagen del grupo
-                groups.get(baseUrl).endIndex = match.index + match[0].length;
+                statusEl.innerText = 'Cargando motor de procesamiento...';
+                await initFFmpeg();
+                
+                statusEl.innerText = 'Leyendo archivo (esto consume RAM temporal)...';
+                await ffmpeg.writeFile('input.mp3', await fetchFile(file));
+                
+                statusEl.innerText = 'Reparando metadatos e índices de tiempo...';
+                // -c copy reconstruye el encabezado Xing/VBR sin alterar la calidad del audio
+                await ffmpeg.exec(['-i', 'input.mp3', '-c', 'copy', 'output.mp3']);
+                
+                statusEl.innerText = 'Preparando archivo final...';
+                const data = await ffmpeg.readFile('output.mp3');
+                
+                const url = URL.createObjectURL(new Blob([data.buffer], { type: 'audio/mpeg' }));
+                downloadBtn.href = url;
+                downloadBtn.download = 'Reparado_' + file.name;
+                downloadBtn.classList.remove('hidden');
+                
+                statusEl.innerText = '¡Proceso completado con éxito!';
+                spinner.classList.add('hidden');
+                statusEl.classList.replace('text-blue-600', 'text-green-600');
+                
+                // Limpiar memoria interna
+                await ffmpeg.deleteFile('input.mp3');
+                await ffmpeg.deleteFile('output.mp3');
+                
+            } catch (error) {
+                statusEl.innerText = 'Error: ' + error.message;
+                statusEl.classList.replace('text-blue-600', 'text-red-600');
+                spinner.classList.add('hidden');
+            } finally {
+                startBtn.disabled = false;
+                startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
-
-        const sortedGroups = Array.from(groups.values());
-        sortedGroups.forEach((g, i) => {
-            const nextStart = sortedGroups[i+1] ? sortedGroups[i+1].startIndex : tweetsContent.length;
-            let rawText = tweetsContent.substring(g.endIndex, nextStart).trim();
-
-            // --- LIMPIEZA PROFUNDA ---
-            rawText = rawText.replace(/\!\[Image \d+: (.*?)\]\(.*?\)/g, '$1');
-            rawText = rawText.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-            rawText = rawText.replace(/\!\[Image \d+: Image\]\(.*?\)/g, '');
-            const cleanText = rawText.replace(/\s+/g, ' ').trim();
-
-            posts.push({
-                title: cleanText.length > 90 ? cleanText.substring(0, 90) + "..." : (cleanText || "Tweet de " + handle),
-                description: cleanText,
-                link: g.url,
-                pubDate: new Date().toISOString(),
-                sName: "@" + handle + " (X)",
-                thumbnail: g.thumb
-            });
-        });
-        return posts;
-    }
-
-    function renderGrid(posts) {
-        const grid = document.getElementById('feed');
-        grid.innerHTML = '';
-
-        let filtered = posts;
-        if(currentFilter === 'favs') {
-            filtered = posts.filter(p => {
-                const text = (p.title + p.description).toLowerCase();
-                return tags.some(t => text.includes(t.toLowerCase()));
-            });
-        } else if(currentFilter !== 'none') {
-            filtered = posts.filter(p => (p.title + p.description).toLowerCase().includes(currentFilter.toLowerCase()));
-        }
-
-        if(filtered.length === 0) {
-            grid.innerHTML = '<div class="loading-msg">No hay noticias que coincidan con el filtro.</div>';
-        }        filtered.forEach(p => {
-            const img = p.thumbnail || p.enclosure.link || (p.description.match(/src="([^"]+)"/) || [])[1];
-            const card = document.createElement('div');
-            card.className = 'post-card';
-            card.style.cursor = 'pointer';
-            card.onclick = () => openReader(p.link, p.sName);
-            card.innerHTML = `
-                ${img ? `<div class="post-thumb-wrapper"><div class="post-thumb-blur" style="background-image: url('${img}')"></div><div class="post-thumb-overlay"></div><img src="${img}" class="post-thumb-main" loading="lazy"></div>` : ''}
-                <div class="post-body">
-                    <span class="post-source">${p.sName}</span>
-                    <h3 class="post-title">${p.title}</h3>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:10px;">${new Date(p.pubDate).toLocaleDateString()}</p>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-        renderFilterBar();
-    }
-
-    function renderFilterBar() {
-        const bar = document.getElementById('filterBar');
-        if(tags.length === 0) { bar.style.display = 'none'; return; }
-        bar.style.display = 'flex';
-        bar.innerHTML = `<div class="filter-chip ${currentFilter==='none'?'active':''}" onclick="setF('none')">Todo</div>
-                         <div class="filter-chip ${currentFilter==='favs'?'active':''}" onclick="setF('favs')">Mis Temas</div>` +
-                         tags.map(t => `<div class="filter-chip ${currentFilter===t?'active':''}" onclick="setF('${t}')">${t}</div>`).join('');
-    }    function setF(val) { currentFilter = val; loadNews(); }    async function openReader(url, source) {
-        const reader = document.getElementById('reader');
-        const content = document.getElementById('readerContent');
-        const original = document.getElementById('originalLink');
-        
-        document.body.style.overflow = 'hidden';
-        reader.style.display = 'flex';
-        content.innerHTML = '<div class="loading-msg"><h3>Limpiando artículo...</h3><p>Eliminando menús de Motorsport, publicidad y ruido visual.</p></div>';
-        original.href = url;        try {
-            const res = await fetch(`https://r.jina.ai/${url}`);
-            const text = await res.text();
-            
-            const lines = text.split('\n');
-            let cleanLines = [];
-            let contentStarted = false;
-            let contentEnded = false;            const menuTerms = ['noticias', 'calendario', 'resultados', 'clasificación', 'fotogalerías', 'videos', 'pilotos', 'equipos', 'f1 academy', 'nascar cup', 'imsa', 's-cer', 'esports', 'fórmula e', 'categorías', 'moto2', 'moto3', 'wsbk', 'rally raid', 'alonso', 'márquez', 'apuestas', 'etapa', 'fia f2', 'fia f3', 'todos', 'temas', 'españa', 'latinoamérica'];
-            const junkPatterns = [
-                'cookie', 'privacidad', 'términos', 'publicidad', 'newsletter', 'suscríbete', 'iniciar sesión', 
-                'copyright', 'hearst', 'todos los derechos', 'aviso legal', 'sitemap', 'skip to content', 
-                'gestionar configuración', 'rechazar aceptar', 'regístrate gratis', 'accede rápidamente', 
-                'haz que tu voz', 'edición', 'enlaces destacados', 'comparte o guarda', 'artículo anterior', 
-                'siguiente artículo', 'mejores comentarios', 'leer y enviar', 'encuesta de 5 minutos', 
-                'descarga tus aplicaciones', 'en redes sociales', 'contáctanos', 'adblocker', 'suscribirse', 
-                'foto de:', 'editado:', 'publicado:', 'copiar enlace', 'participa', 'todos los campeonatos', 'enlaces rápidos', 'ir al contenido principal', 'modo lectura', 'volver', '🌐'];
-
-            for (let line of lines) {
-                if (contentEnded) break;
-                const trimmed = line.trim();
-                const lower = trimmed.toLowerCase();
-                if (!trimmed) continue;
-
-                if (line.startsWith('## ') && (lower.includes('comentarios') || lower.includes('últimas noticias') || lower.includes('también puedes leer'))) {
-                    contentEnded = true;
-                    continue;
-                }
-                if (lower.includes('¿qué le gustaría ver en motorsport.com?')) {
-                    contentEnded = true;
-                    continue;
-                }                
-                if (!contentStarted && line.startsWith('# ')) {
-                    const isJunkTitle = junkPatterns.some(p => lower.includes(p)) || menuTerms.some(t => lower === t);
-                    if (lower.length > 15 && !isJunkTitle) contentStarted = true;
-                }
-
-                if (contentStarted) {
-                    const isMenuLine = menuTerms.some(term => lower.includes(term));
-                    const isList = line.startsWith('* ') || line.startsWith('- ');
-                    if (isMenuLine || (isList && line.length < 60)) continue;
-                    if (line.startsWith('# ') && cleanLines.some(l => l.includes(line.substring(2)))) continue;
-                    if (/^\d+$/.test(trimmed) || trimmed === '#' || trimmed === '***' || trimmed === '---' || trimmed === '##') continue;
-                    if (junkPatterns.some(p => lower.includes(p))) continue;
-                    const social = ['facebook', 'twitter', 'whatsapp', 'linkedin', 'viber', 'pinterest', 'instagram', 'youtube', 'rss', 'copiar enlace'];
-                    if (social.some(s => lower.includes(s))) continue;
-                    if (line.includes('![Image') && (lower.includes('logo') || lower.includes('icon') || lower.includes('avatar') || lower.includes('bandera'))) continue;
-                    cleanLines.push(line);
-                }
-            }            
-            
-            // Si no se pudo limpiar adecuadamente, lanzamos error para usar el iframe
-            if (cleanLines.length < 5) throw new Error("Contenido insuficiente");
-            
-            const processedText = cleanLines.join('\n');
-            let html = processedText;
-
-            // --- PROCESADOR DE TABLAS MARKDOWN ---
-            const tableRegex = /((?:\|.*\|(?:\n|\r\n?))+)/g;
-            html = html.replace(tableRegex, (match) => {
-                const rows = match.trim().split('\n').filter(r => r.includes('|'));
-                if (rows.length < 2) return match;
-                
-                let tableHtml = '<table><thead>';
-                let bodyStarted = false;
-
-                rows.forEach((row, idx) => {
-                    if (row.includes('---|') || row.includes(':---|')) return;
-                    
-                    const cols = row.split('|').filter((c, i, arr) => i > 0 && i < arr.length - 1).map(c => c.trim());
-                    const tag = (!bodyStarted && idx === 0) ? 'th' : 'td';
-                    
-                    tableHtml += '<tr>' + cols.map(c => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
-                    
-                    if (idx === 0) {
-                        tableHtml += '</thead><tbody>';
-                        bodyStarted = true;
-                    }
-                });
-                return tableHtml + '</tbody></table>';
-            });
-
-            html = html
-                .replace(/# (.*)/g, '<h1>$1</h1>')
-                .replace(/## (.*)/g, '<h2>$1</h2>')
-                .replace(/### (.*)/g, '<h3>$1</h3>')
-                .replace(/\!\s*\[.*?\]\((.*?)\)/g, '<img src="$1" loading="lazy">')
-                .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>');
-            
-            content.innerHTML = `<div style="font-size:0.75rem; color:var(--primary); margin-bottom:10px; font-weight:700;">MODO LECTURA: ${source}</div><hr style="border:0; border-top:1px solid var(--border); margin:20px 0;"><p>${html}</p>`;        } catch(e) {
-            content.innerHTML = `
-                <div style="height: calc(100vh - 150px); display: flex; flex-direction: column;">
-                    <div style="padding: 10px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; color: var(--primary); font-size: 0.8rem; margin-bottom: 15px; text-align: center; border: 1px solid var(--border);">
-                        <i class="fas fa-info-circle"></i> El modo lectura optimizado no está disponible. Mostrando sitio original dentro de Insight News.
-                    </div>
-                    <iframe src="${url}" style="flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 12px; background: white;" allowfullscreen></iframe>
-                </div>`;
-        }
-    }
-
-    function closeReader() {
-        document.getElementById('reader').style.display = 'none';
-        document.body.style.overflow = 'auto';
-    }
-    
-    function addTag() {
-        const i = document.getElementById('tagIn');
-        const val = i.value.trim();
-        if(val && !tags.includes(val)) {
-            tags.push(val);
-            localStorage.setItem('tags_v4', JSON.stringify(tags));
-            i.value = ''; renderSettings(); loadNews();
-        }
-    }
-
-    function renderSettings() {
-        document.getElementById('srcList').innerHTML = feeds.map((f, i) => `<div class="item-pill"><span>${f.split('/')[2]}...</span><span class="del-btn" onclick="remF(${i})">✕</span></div>`).join('');
-        document.getElementById('tagList').innerHTML = tags.map((t, i) => `<div class="item-pill"><span>${t}</span><span class="del-btn" onclick="remT(${i})">✕</span></div>`).join('');
-    }
-
-    function remF(i) { feeds.splice(i,1); localStorage.setItem('feeds_v4', JSON.stringify(feeds)); renderSettings(); loadNews(); }
-    function remT(i) { tags.splice(i,1); localStorage.setItem('tags_v4', JSON.stringify(tags)); renderSettings(); loadNews(); }
-</script>
+    </script>
 </body>
 </html>
