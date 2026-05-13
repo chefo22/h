@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -515,10 +516,56 @@
 
         input:checked + .slider {
             background-color: var(--color-principal);
+        }        input:checked + .slider:before {
+            transform: translateX(20px);
         }
 
-        input:checked + .slider:before {
-            transform: translateX(20px);
+        /* Estilos de Capítulos */
+        .chapters-wrapper {
+            margin: 20px 10px 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 15px;
+            text-align: left;
+        }
+        .chapters-header-title {
+            font-size: 0.7rem;
+            font-weight: 900;
+            color: var(--color-principal);
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            text-indent: 2px;
+        }
+        .chapters-list-box {
+            max-height: 160px;
+            overflow-y: auto;
+            background: #0d0d0d;
+            border-radius: 16px;
+            padding: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            scrollbar-width: none;
+        }
+        .chapters-list-box::-webkit-scrollbar { display: none; }
+        .chapter-row-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border-bottom: 1px solid #141414;
+            color: #cccccc;
+            border-radius: 8px;
+        }
+        .chapter-row-item:last-child { border-bottom: none; }
+        .chapter-row-item:active {
+            background: rgba(var(--color-principal-rgb), 0.15);
+            color: #ffffff;
+        }
+        .chapter-row-item .ch-time {
+            color: var(--color-principal);
+            font-family: monospace;
+            font-weight: 700;
         }
     </style>
 </head>
@@ -655,20 +702,32 @@
                 <i class="material-icons" style="font-size: 30px; color: #666;">timer</i>
             </button>
         </div>
-    </div>
-    <div id="quick-settings-row" style="display: none; justify-content: space-evenly; align-items: center; margin: 15px 10px 5px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.05);">
+    </div>    <div id="quick-settings-row" style="display: none; justify-content: space-evenly; align-items: center; margin: 15px 10px 5px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.05);">
         <button onclick="document.getElementById('normalize-vol').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Modo Noche">
             <i class="material-icons">brightness_4</i>
         </button>
         <button onclick="document.getElementById('lock-seek').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Bloquear Seek">
             <i class="material-icons">lock</i>
         </button>
+        <button onclick="openChaptersModal()" class="mode-btn" title="Capítulos">
+            <i class="material-icons">format_list_bulleted</i>
+        </button>
         <button onclick="document.getElementById('next-as-timer').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Siguiente +5min">
             <i class="material-icons">more_time</i>
-        </button>
-        <button onclick="document.getElementById('silence-beep').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Bip Seguridad">
+        </button>        <button onclick="document.getElementById('silence-beep').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Bip Seguridad">
             <i class="material-icons">notifications_active</i>
         </button>
+    </div>    <div id="chapters-wrapper-ui" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; align-items:flex-end; backdrop-filter: blur(10px);">
+        <div id="chapters-content" style="width:100%; background:#161616; border-radius: 30px 30px 0 0; padding: 24px; box-sizing: border-box; animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-top: 1px solid #333; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+            <div id="chapters-handle" style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; margin-top: -15px; cursor: grab; touch-action: none;">
+                <div style="width: 40px; height: 4px; background: #444; border-radius: 2px;"></div>
+            </div>
+            <h3 id="chapters-status-title" style="text-align:center; margin-bottom: 20px; font-size: 1.1rem; color: var(--color-principal); font-weight: 900; letter-spacing: 2px; text-transform: uppercase;">Buscando capítulos...</h3>
+            <div class="chapters-list-box" id="chapters-list-box" style="max-height: 50vh; overflow-y: auto; scrollbar-width: none; background: #0d0d0d; border-radius: 16px; padding: 6px; border: 1px solid rgba(255, 255, 255, 0.04);">
+                 <div style="padding:15px; color:#888; text-align:center; font-size:0.85rem;">Analizando archivo binario...</div>
+            </div>
+            <button onclick="closeChaptersModal()" style="width:100%; text-align:center; border:none; padding:15px; color:var(--color-principal); font-weight:bold; margin-top:10px; background:none; cursor:pointer;">Cerrar</button>
+        </div>
     </div>
 
     <style>
@@ -1401,11 +1460,18 @@
                         document.getElementById('cover-container').style.display = 'block';
                     }
                 });
-            } catch (e) {}
-
-            const objectURL = URL.createObjectURL(file);
+            } catch (e) {}            const objectURL = URL.createObjectURL(file);
             audio.src = objectURL;
-            audio.load();
+            audio.load();            // Preparar UI de capítulos
+            const chapWrapper = document.getElementById('chapters-wrapper-ui');
+            const chapBox = document.getElementById('chapters-list-box');
+            const chapStatus = document.getElementById('chapters-status-title');
+            if(chapWrapper && chapBox) {
+                chapStatus.innerText = 'Analizando estructura...';
+                chapBox.innerHTML = '<div style="padding:15px; color:#888; text-align:center; font-size:0.85rem;"><i class="material-icons" style="font-size:18px; vertical-align:middle; margin-right:5px; animation: pulse 1.5s infinite;">hourglass_empty</i>Leyendo binarios...</div>';
+            }
+            
+            setTimeout(() => { if(typeof analyzeChaptersBinary === 'function') analyzeChaptersBinary(file); }, 200);
             
             // Mostrar la fila de ajustes rápidos al cargar un archivo
             document.getElementById('quick-settings-row').style.display = 'flex';        playPauseBtn.innerHTML = '<i class="material-icons" style="font-size: 2.5rem;">play_arrow</i>';
@@ -1610,11 +1676,28 @@
                     startY = 0; currentY = 0;
                 });
             }
-        };
-
-        setupSwipeClose('timer-handle', 'timer-content', closeTimerModal);
+        };        setupSwipeClose('timer-handle', 'timer-content', closeTimerModal);
         setupSwipeClose('speed-handle', 'speed-content', closeSpeedModal);
-    });    function setTimer(minutes) {
+        setupSwipeClose('chapters-handle', 'chapters-content', closeChaptersModal);
+    });
+
+    function openChaptersModal() {
+        if (!audio.src) {
+            alert("Por favor, selecciona primero un archivo de audio.");
+            return;
+        }
+        const modal = document.getElementById('chapters-wrapper-ui');
+        const content = document.getElementById('chapters-content');
+        modal.style.display = 'flex';
+        content.style.transform = 'translateY(0)';
+    }
+    
+    function closeChaptersModal() {
+        const modal = document.getElementById('chapters-wrapper-ui');
+        const content = document.getElementById('chapters-content');
+        content.style.transform = 'translateY(100%)';
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+    }    function setTimer(minutes) {
         clearTimeout(sleepTimerTimeout);
         clearInterval(sleepTimerInterval);
         closeTimerModal();
@@ -1836,15 +1919,119 @@
 
         swipeArea.addEventListener('touchstart', handleTouchStart, {passive: true});
         swipeArea.addEventListener('touchmove', handleTouchMove, {passive: true});
-        swipeArea.addEventListener('touchend', handleTouchEnd);
-        
-        const uiContainer = document.getElementById('player-ui-container');
+        swipeArea.addEventListener('touchend', handleTouchEnd);        const uiContainer = document.getElementById('player-ui-container');
         if(uiContainer) {
             uiContainer.addEventListener('touchstart', handleTouchStart, {passive: true});
             uiContainer.addEventListener('touchmove', handleTouchMove, {passive: true});
             uiContainer.addEventListener('touchend', handleTouchEnd);
         }
     });
+
+    // --- MOTOR DE EXTRACCIÓN MAESTRA BINARIA ---
+    async function analyzeChaptersBinary(file) {
+        const chapStatus = document.getElementById('chapters-status-title');
+        const box = document.getElementById('chapters-list-box');
+        if (!file.name.toLowerCase().match(/\.(m4a|m4b|mp4)$/)) {
+            if(chapStatus) chapStatus.innerText = 'Formato sin capítulos binarios';
+            if(box) box.innerHTML = '<div style="padding:15px; color:#666; text-align:center; font-size:0.85rem;">Solo archivos M4B/M4A soportan esta tabla.</div>';
+            return;
+        }
+        try {
+            const mp4box = MP4Box.createFile();
+            const buffer = await file.arrayBuffer();
+            buffer.fileStart = 0;
+
+            mp4box.onReady = (info) => {
+                let parsedList = [];
+                if (info.chapters && info.chapters.length > 0) {
+                    parsedList = info.chapters.map(c => ({
+                        name: c.title,
+                        time: c.start_time / info.timescale
+                    }));
+                } else {
+                    const moov = mp4box.moov;
+                    if (moov) {
+                        const udta = moov.boxes.find(b => b.type === 'udta');
+                        const chpl = udta?.boxes.find(b => b.type === 'chpl');
+                        if (chpl && chpl.chapters) {
+                            parsedList = chpl.chapters.map((c, i) => ({
+                                name: c.title || `Capítulo ${i + 1}`,
+                                time: c.start_time / 10000000
+                            }));
+                        }
+                    }
+                }
+
+                if (parsedList.length === 0) {
+                    const view = new Uint8Array(buffer);
+                    let offset = -1;
+                    for (let i = 0; i < view.length - 4; i++) {
+                        if (view[i] === 99 && view[i+1] === 104 && view[i+2] === 112 && view[i+3] === 108) {
+                            offset = i;
+                            break;
+                        }
+                    }
+                    if (offset !== -1) {
+                        const data = new DataView(buffer);
+                        let pos = offset + 12;
+                        let count = data.getUint8(pos);
+                        if (count === 0 || count > 255) {
+                            pos = offset + 9;
+                            count = data.getUint8(pos);
+                        }
+                        if (count > 0 && count < 500) {
+                            pos++;
+                            for (let i = 0; i < count; i++) {
+                                const timeRaw = Number(data.getBigUint64(pos));
+                                const seconds = timeRaw / 10000000;
+                                pos += 8;
+                                const nameLen = data.getUint8(pos);
+                                pos++;
+                                const nameBytes = new Uint8Array(buffer, pos, nameLen);                                const name = new TextDecoder().decode(nameBytes) || `Capítulo ${i + 1}`;
+                                pos += nameLen;
+                                parsedList.push({ name: name, time: seconds });
+                            }
+                        }
+                    }
+                }
+
+                if (parsedList.length > 0) {
+                    renderChaptersUI(parsedList);
+                } else {
+                    if(chapStatus) chapStatus.innerText = 'Sin capítulos';
+                    if(box) box.innerHTML = '<div style="padding:15px; color:#666; text-align:center; font-size:0.85rem;">No se encontraron marcas de capítulos internas.</div>';
+                }
+            };
+            mp4box.appendBuffer(buffer);
+            mp4box.flush();
+        } catch (err) {
+            console.warn("Error analizando cabeceras:", err);
+            if(chapStatus) chapStatus.innerText = 'Error de lectura';
+            if(box) box.innerHTML = '<div style="padding:15px; color:#ff4757; text-align:center; font-size:0.85rem;">El archivo es demasiado pesado o ilegible.</div>';
+        }
+    }
+
+    function renderChaptersUI(list) {
+        const box = document.getElementById('chapters-list-box');
+        const chapStatus = document.getElementById('chapters-status-title');
+        if (!box) return;
+        if (chapStatus) chapStatus.innerText = `CAPÍTULOS DETECTADOS (${list.length})`;
+        box.innerHTML = '';
+        list.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'chapter-row-item';
+            div.innerHTML = `<span>${c.name}</span><span class="ch-time">${formatTime(c.time)}</span>`;            div.onclick = (e) => {
+                e.stopPropagation();
+                const audio = document.getElementById('audio-player');
+                if(audio) {
+                    audio.currentTime = c.time;
+                    audio.play();
+                    closeChaptersModal();
+                }
+            };
+            box.appendChild(div);
+        });
+    }
 </script>
 
 </body>
