@@ -932,8 +932,9 @@
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : "74, 144, 226";
     }    function setThemeColor(hex, save = true) {
-        // Solo actualizamos la propiedad principal; la transición CSS hará el resto de forma fluida
+        // Actualizamos el color principal y sus valores RGB para que los efectos de pulso (box-shadow) sigan el tema
         document.documentElement.style.setProperty('--color-principal', hex);
+        document.documentElement.style.setProperty('--color-principal-rgb', hexToRgb(hex));
         
         if (save) {
             localStorage.setItem('audiobook_theme_color', hex);
