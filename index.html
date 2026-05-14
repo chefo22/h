@@ -18,10 +18,12 @@
             --color-principal-rgb: 74, 144, 226;
         }
         /* Estilos generales y fondo */        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: #050505;
-            background: radial-gradient(circle at top, rgba(var(--color-principal-rgb), 0.15) 0%, #050505 100%);
+            /* Estructura fija: solo dependen de las variables */
+            background-image: radial-gradient(circle at top, rgba(var(--color-principal-rgb), 0.15) 0%, #050505 100%);
             background-attachment: fixed;
+            background-repeat: no-repeat;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -908,18 +910,16 @@
         return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : "74, 144, 226";
     }    function setThemeColor(hex, save = true) {
         const rgb = hexToRgb(hex);
+        // Seteamos las variables en el root para que el CSS las tome automáticamente
         document.documentElement.style.setProperty('--color-principal', hex);
         document.documentElement.style.setProperty('--color-principal-rgb', rgb);
         
-        // Solo guardamos si es una elección manual del usuario
         if (save) {
             localStorage.setItem('audiobook_theme_color', hex);
             dbPut("settings", { key: "themeColor", value: hex }).catch(() => {});
         }
-        
-        document.body.style.background = `radial-gradient(circle at top, rgba(${rgb}, 0.15) 0%, #050505 100%)`;
-        document.body.style.backgroundColor = "#050505";
-        document.body.style.backgroundAttachment = "fixed";
+
+        /* Eliminamos la inyección directa en el body que causaba el error de 'rompimiento' */
 
         if (window.event && window.event.target && window.event.target.classList.contains('color-dot')) {
             document.querySelectorAll('.color-dot').forEach(dot => {
@@ -988,6 +988,7 @@
     let sleepTimerInterval;
     let timerTotalSeconds = 0;
     let currentFileName = "";
+    let chapterStopPoint = null;
     let db;
 
     // ── Helpers IndexedDB genéricos ──────────────────────────────────────
@@ -1037,9 +1038,7 @@
         if (navigator.storage && navigator.storage.persist) {
             const isPersisted = await navigator.storage.persist();
             console.log(`Persistencia de datos: ${isPersisted ? "Garantizada" : "Temporal"}`);
-        }
-
-        const dbRequest = indexedDB.open("AudiobookProDB", 2);
+        }        const dbRequest = indexedDB.open("AudiobookProDB", 3);
 
         dbRequest.onupgradeneeded = (e) => {
             db = e.target.result;
@@ -1048,9 +1047,11 @@
             }
             if (!db.objectStoreNames.contains("progress")) {
                 db.createObjectStore("progress", { keyPath: "name" });
-            }
-            if (!db.objectStoreNames.contains("settings")) {
+            }            if (!db.objectStoreNames.contains("settings")) {
                 db.createObjectStore("settings", { keyPath: "key" });
+            }
+            if (!db.objectStoreNames.contains("chapters")) {
+                db.createObjectStore("chapters", { keyPath: "name" });
             }
         };        dbRequest.onsuccess = (e) => {
             db = e.target.result;
@@ -1065,35 +1066,116 @@
         dbRequest.onerror = (e) => console.error("Error IndexedDB:", e);
     }
 
-    initDB();
-
-    function saveToLibrary(file) {
+    initDB();    function saveToLibrary(file) {
         if (!db) {
             timerMsg.textContent = "Error: BD no lista";
             return;
         }
+
+        // --- UI Optimista: Sensación de velocidad instantánea ---
+        const list = document.getElementById('library-list');
+        const tempId = 'opt-' + Date.now();
+        let tempCard = null;
         
-        const transaction = db.transaction(["books"], "readwrite");
-        const store = transaction.objectStore("books");
+        if (list) {
+            tempCard = document.createElement('div');
+            tempCard.className = 'book-card';
+            tempCard.id = tempId;
+            tempCard.style.opacity = '0.7';
+
+            let cleanName = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
+            let tPart = cleanName, aPart = "GUARDANDO...";
+            if (cleanName.includes("-")) {
+                const p = cleanName.split("-").map(x => x.trim());
+                tPart = p[0]; aPart = p[1];
+            }
+
+            const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';
+            const spacer = "&nbsp;".repeat(10);
+            const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
+            const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
+
+            tempCard.innerHTML = `
+                <div class="book-thumb" style="position:relative; background-image: url(${generateRandomWaves()}); border: 2px dashed var(--color-principal);">
+                    <div class="status-dot" style="background:#f59e0b; animation: pulse 1s infinite;"></div>
+                </div>
+                <div class="book-label">
+                    <div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text" id="${tempId}-title">${tContent}</span></div>
+                    <div class="marquee-container ${checkScroll(aPart)}" style="color:var(--color-principal); opacity:0.8;"><span class="marquee-text" id="${tempId}-author">PROCESANDO...</span></div>
+                </div>
+            `;
+            
+            const addCard = list.lastElementChild;
+            if(addCard && addCard.innerHTML.includes('add_circle_outline')) {
+                list.insertBefore(tempCard, addCard);
+            } else {
+                list.appendChild(tempCard);
+            }
+        }
+        // --------------------------------------------------------
         
-        const bookData = { 
-            name: file.name, 
-            data: file, 
-            added: new Date().getTime()
+        const doSave = (meta) => {
+            // Actualizar UI optimista con carátula real ANTES del guardado IDB pesado
+            if (tempCard) {
+                if (meta.cover) tempCard.querySelector('.book-thumb').style.backgroundImage = `url(${meta.cover})`;
+                tempCard.querySelector('.book-thumb').style.border = "1px solid #252525";
+                if (meta.title) {
+                    const tEl = document.getElementById(`${tempId}-title`);
+                    if(tEl) tEl.innerHTML = meta.title.toUpperCase();
+                }
+                const aEl = document.getElementById(`${tempId}-author`);
+                if(aEl) aEl.innerHTML = "ALMACENANDO...";
+            }
+
+            // Pequeño retardo (50ms) para permitir que el navegador pinte (renderice) la carátula y la UI antes de congelarse guardando el binario masivo en IndexedDB
+            setTimeout(() => {
+                const transaction = db.transaction(["books"], "readwrite");
+                const store = transaction.objectStore("books");
+                
+                const bookData = { 
+                    name: file.name, 
+                    data: file, 
+                    added: new Date().getTime(),
+                    metaTitle: meta.title || null,
+                    metaArtist: meta.artist || null,
+                    metaCover: meta.cover || null
+                };
+
+                store.put(bookData);
+                
+                transaction.oncomplete = () => {
+                    timerMsg.textContent = "Guardado permanentemente ✓";
+                    displayLibrary();
+                    setTimeout(() => timerMsg.textContent = "", 3000);
+                };
+
+                transaction.onerror = (e) => {
+                    console.error("Error al guardar:", e);
+                    timerMsg.textContent = "Error al guardar libro";
+                    if (tempCard) tempCard.remove();
+                };
+            }, 50);
         };
 
-        const request = store.put(bookData);
-        
-        transaction.oncomplete = () => {
-            timerMsg.textContent = "Guardado permanentemente ✓";
-            displayLibrary();
-            setTimeout(() => timerMsg.textContent = "", 3000);
-        };
-
-        transaction.onerror = (e) => {
-            console.error("Error al guardar:", e);
-            timerMsg.textContent = "Error al guardar libro";
-        };
+        try {
+            window.jsmediatags.read(file, {
+                onSuccess: (tag) => {
+                    let meta = {};
+                    const { title, artist, picture } = (tag && tag.tags) || {};
+                    if (title) meta.title = title;
+                    if (artist) meta.artist = artist;
+                    if (picture) {
+                        let b = ""; 
+                        for (let i = 0; i < picture.data.length; i++) b += String.fromCharCode(picture.data[i]);
+                        meta.cover = `data:${picture.format};base64,${window.btoa(b)}`;
+                    }
+                    doSave(meta);
+                },
+                onError: () => doSave({})
+            });
+        } catch (e) {
+            doSave({});
+        }
     }    function displayLibrary() {
         const list = document.getElementById('library-list');
         if (!list) return;
@@ -1195,79 +1277,57 @@
                         loadFromLibrary(bookName);
                     });
 
-                    list.appendChild(card);
-
-                    // Lectura de Metadatos Segura (No bloqueante)
-                    if (bookData.data) {
-                        try {
-                            window.jsmediatags.read(bookData.data, {
-                                onSuccess: (tag) => {
-                                    const { title, artist, picture } = (tag && tag.tags) || {};
-                                    const labelEl = card.querySelector('.book-label');                                    if (title) {
-                                        let cleanTitle = title.replace(/\.[^/.]+$/, "").toUpperCase();
-                                        let cleanArtist = (artist || "Autor Desconocido").toUpperCase();
-                                        const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';                                        const spacer = "&nbsp;".repeat(10);
-                                        const tCont = checkScroll(cleanTitle) ? (cleanTitle + spacer).repeat(2) : cleanTitle;
-                                        const aCont = checkScroll(cleanArtist) ? (cleanArtist + spacer).repeat(2) : cleanArtist;
-                                        labelEl.innerHTML = `<div class="marquee-container ${checkScroll(cleanTitle)}"><span class="marquee-text">${tCont}</span></div>` + 
-                                                           `<div class="marquee-container ${checkScroll(cleanArtist)}" style="color: var(--color-principal);"><span class="marquee-text">${aCont}</span></div>`;
-                                    }
-                                    if (picture) {
-                                        const p = picture;
-                                        let b = ""; for (let i = 0; i < p.data.length; i++) b += String.fromCharCode(p.data[i]);
-                                        const artworkUrl = `data:${p.format};base64,${window.btoa(b)}`;
-                                        thumb.style.backgroundImage = `url(${artworkUrl})`;
-                                        const icon = thumb.querySelector('.material-icons');
-                                        if (icon) icon.style.display = 'none';
-                                        
-                                        // Status Dot Camaleón Seguro
-                                        const imgDot = new Image();
-                                        imgDot.src = artworkUrl;
-                                        imgDot.onload = () => {
-                                            const canvas = document.createElement('canvas');
-                                            const ctx = canvas.getContext('2d');
-                                            canvas.width = 1; canvas.height = 1;
-                                            ctx.drawImage(imgDot, 0, 0, 1, 1);
-                                            const pix = ctx.getImageData(0, 0, 1, 1).data;
-                                            if (pix[3] === 0) return; // Ignorar si es transparente
-                                            let r = pix[0]/255, g = pix[1]/255, b = pix[2]/255;
-                                            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-                                            let h, s, l = (max + min) / 2;
-                                            if (max === min) h = s = 0; 
-                                            else {
-                                                let diff = max - min;
-                                                s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
-                                                if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
-                                                else if (max === g) h = (b - r) / diff + 2;
-                                                else h = (r - g) / diff + 4;
-                                                h /= 6;
-                                            }                                            const extractedColor = `hsl(${Math.round(h * 360) || 0}, ${Math.max(Math.round(s * 100), 70)}%, 60%)`;
-                                            const dot = card.querySelector('.status-dot');
-                                            if (dot) {
-                                                dot.style.backgroundColor = extractedColor;
-                                            }
-                                            // Aplicar el mismo color extraído a la segunda línea (autor)
-                                            const secondLine = card.querySelector('.book-label div:nth-child(2)');
-                                            if (secondLine) {
-                                                secondLine.style.color = extractedColor;
-                                            }
-                                        };
-                                    } else {
-                                        const waveUrl = generateRandomWaves();
-                                        thumb.style.backgroundImage = `url(${waveUrl})`;
-                                        const icon = thumb.querySelector('.material-icons');
-                                        if (icon) icon.style.display = 'none';
-                                    }
-                                },
-                                onError: (error) => {
-                                    console.warn("Error leyendo tags de: " + bookName);
-                                    const waveUrl = generateRandomWaves();
-                                    thumb.style.backgroundImage = `url(${waveUrl})`;
-                                    const icon = thumb.querySelector('.material-icons');
-                                    if (icon) icon.style.display = 'none';
-                                }
-                            });
-                        } catch (e) { console.error("Error en proceso de tags:", e); }
+                    list.appendChild(card);                    // Aplicar Metadatos en Caché (Sin Bloqueo de Memoria)
+                    if (bookData.metaTitle || bookData.metaArtist) {
+                        const labelEl = card.querySelector('.book-label');
+                        let cleanTitle = (bookData.metaTitle || bookName).replace(/\.[^/.]+$/, "").toUpperCase();
+                        let cleanArtist = (bookData.metaArtist || "Autor Desconocido").toUpperCase();
+                        const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';
+                        const spacer = "&nbsp;".repeat(10);
+                        const tCont = checkScroll(cleanTitle) ? (cleanTitle + spacer).repeat(2) : cleanTitle;
+                        const aCont = checkScroll(cleanArtist) ? (cleanArtist + spacer).repeat(2) : cleanArtist;
+                        labelEl.innerHTML = `<div class="marquee-container ${checkScroll(cleanTitle)}"><span class="marquee-text">${tCont}</span></div>` + 
+                                           `<div class="marquee-container ${checkScroll(cleanArtist)}" style="color: var(--color-principal);"><span class="marquee-text">${aCont}</span></div>`;
+                    }
+                    
+                    if (bookData.metaCover) {
+                        thumb.style.backgroundImage = `url(${bookData.metaCover})`;
+                        const icon = thumb.querySelector('.material-icons');
+                        if (icon) icon.style.display = 'none';
+                        
+                        // Status Dot Camaleón Seguro
+                        const imgDot = new Image();
+                        imgDot.src = bookData.metaCover;
+                        imgDot.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = 1; canvas.height = 1;
+                            ctx.drawImage(imgDot, 0, 0, 1, 1);
+                            const pix = ctx.getImageData(0, 0, 1, 1).data;
+                            if (pix[3] === 0) return;
+                            let r = pix[0]/255, g = pix[1]/255, b = pix[2]/255;
+                            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+                            let h, s, l = (max + min) / 2;
+                            if (max === min) h = s = 0; 
+                            else {
+                                let diff = max - min;
+                                s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
+                                if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
+                                else if (max === g) h = (b - r) / diff + 2;
+                                else h = (r - g) / diff + 4;
+                                h /= 6;
+                            }
+                            const extractedColor = `hsl(${Math.round(h * 360) || 0}, ${Math.max(Math.round(s * 100), 70)}%, 60%)`;
+                            const dot = card.querySelector('.status-dot');
+                            if (dot) dot.style.backgroundColor = extractedColor;
+                            const secondLine = card.querySelector('.book-label div:nth-child(2)');
+                            if (secondLine) secondLine.style.color = extractedColor;
+                        };
+                    } else {
+                        const waveUrl = generateRandomWaves();
+                        thumb.style.backgroundImage = `url(${waveUrl})`;
+                        const icon = thumb.querySelector('.material-icons');
+                        if (icon) icon.style.display = 'none';
                     }
                 });                // Añadir tarjeta de carga al final de la lista
                 const addCard = document.createElement('div');
@@ -1460,8 +1520,11 @@
                         document.getElementById('cover-container').style.display = 'block';
                     }
                 });
-            } catch (e) {}            const objectURL = URL.createObjectURL(file);
-            audio.src = objectURL;
+            } catch (e) {}            if (window.currentAudioURL) {
+                URL.revokeObjectURL(window.currentAudioURL);
+            }
+            window.currentAudioURL = URL.createObjectURL(file);
+            audio.src = window.currentAudioURL;
             audio.load();            // Preparar UI de capítulos
             const chapWrapper = document.getElementById('chapters-wrapper-ui');
             const chapBox = document.getElementById('chapters-list-box');
@@ -1581,6 +1644,13 @@
         currentTimeEl.textContent = formatTime(audio.currentTime);
         updateDurationDisplay();
         updateProgressFill();
+
+        if (chapterStopPoint && audio.currentTime >= chapterStopPoint) {
+            audio.pause();
+            chapterStopPoint = null;
+            if (timerMsg) timerMsg.textContent = "Pausado por fin de capítulo";
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        }
         
         if(currentFileName && !audio.paused) {
             saveProgress();
@@ -1700,6 +1770,7 @@
     }    function setTimer(minutes) {
         clearTimeout(sleepTimerTimeout);
         clearInterval(sleepTimerInterval);
+        chapterStopPoint = null;
         closeTimerModal();
         
         const timerIcon = document.getElementById('timer-icon');
@@ -2017,19 +2088,58 @@
         if (!box) return;
         if (chapStatus) chapStatus.innerText = `CAPÍTULOS DETECTADOS (${list.length})`;
         box.innerHTML = '';
-        list.forEach(c => {
+        list.forEach((c, index) => {
             const div = document.createElement('div');
             div.className = 'chapter-row-item';
-            div.innerHTML = `<span>${c.name}</span><span class="ch-time">${formatTime(c.time)}</span>`;            div.onclick = (e) => {
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.gap = '10px';
+            
+            div.innerHTML = `
+                <div style="flex:1; display:flex; justify-content:space-between; align-items:center;" class="ch-text-info">
+                    <span>${c.name}</span>
+                    <span class="ch-time">${formatTime(c.time)}</span>
+                </div>
+                <button class="stop-ch-btn" style="color:#666; background:none; border:none; cursor:pointer; display:flex; align-items:center; padding:5px;" title="Pausar al terminar este capítulo">
+                    <i class="material-icons" style="font-size:20px;">update</i>
+                </button>
+            `;
+
+            div.querySelector('.ch-text-info').onclick = () => {
+                audio.currentTime = c.time;
+                audio.play();
+                closeChaptersModal();
+            };            const stopBtn = div.querySelector('.stop-ch-btn');
+            stopBtn.onclick = (e) => {
                 e.stopPropagation();
-                const audio = document.getElementById('audio-player');
-                if(audio) {
-                    audio.currentTime = c.time;
-                    audio.play();
-                    closeChaptersModal();
+                const nextC = list[index + 1];
+                const targetPoint = nextC ? nextC.time : audio.duration;
+
+                // Lógica de Toggle: Si ya es el punto de parada actual, se desactiva
+                if (chapterStopPoint === targetPoint) {
+                    chapterStopPoint = null;
+                    if(timerMsg) timerMsg.textContent = "";
+                    stopBtn.style.color = '#666';
+                    if (navigator.vibrate) navigator.vibrate(30);
+                } else {
+                    chapterStopPoint = targetPoint;
+                    
+                    // Limpiar otros temporizadores activos
+                    clearTimeout(sleepTimerTimeout);
+                    clearInterval(sleepTimerInterval);
+                    document.getElementById('timer-icon').style.color = '#888';
+
+                    if(timerMsg) timerMsg.textContent = "Se detendrá al finalizar: " + c.name;
+                    
+                    // Feedback visual de botones
+                    document.querySelectorAll('.stop-ch-btn').forEach(b => b.style.color = '#666');
+                    stopBtn.style.color = 'var(--color-principal)';
+                    if (navigator.vibrate) navigator.vibrate(50);
                 }
+                closeChaptersModal();
             };
-            box.appendChild(div);
+
+            box.appendChild(div); 
         });
     }
 </script>
