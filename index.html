@@ -488,10 +488,31 @@
             padding: 0;
             font-weight: bold;
             transition: transform 0.2s;
+        }        /* Solo se muestra cuando el contenedor tiene la clase reorder-mode */        .reorder-mode .delete-btn-mini, .reorder-mode .download-btn-mini {
+            display: flex;
         }
 
-        /* Solo se muestra cuando el contenedor tiene la clase reorder-mode */        .reorder-mode .delete-btn-mini {
-            display: flex;
+        .download-btn-mini {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            background: #2ed573;
+            color: white;
+            border: 2px solid #111;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            font-size: 0.75rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            line-height: 0;
+            padding: 0;
+            font-weight: bold;
+            transition: transform 0.2s;
         }
 
         /* Estilos para los Switches */
@@ -1232,13 +1253,12 @@
                     const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
                     const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
-                                       `<div class="marquee-container ${checkScroll(aPart)}" style="color:var(--color-principal); opacity:0.8;"><span class="marquee-text">${aContent}</span></div>`;
-                    
-                    card.innerHTML = `
+                                       `<div class="marquee-container ${checkScroll(aPart)}" style="color:var(--color-principal); opacity:0.8;"><span class="marquee-text">${aContent}</span></div>`;                    card.innerHTML = `
                         <div class="book-thumb" style="position:relative">
                             ${(progress && parseFloat(progress) > 0) ? '<div class="status-dot"></div>' : ''}
                             <i class="material-icons" style="font-size: 2.5rem; opacity: 0.15;">headset</i>
                             <button class="delete-btn-mini" onclick="event.stopPropagation(); deleteFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">close</i></button>
+                            <button class="download-btn-mini" onclick="event.stopPropagation(); downloadFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">download</i></button>
                         </div>
                         <div class="book-label">${formattedLabel}</div>
                     `;                    const thumb = card.querySelector('.book-thumb');
@@ -1380,15 +1400,28 @@
                 }
             }
         };
-    }
-
-    function deleteFromLibrary(name) {
+    }    function deleteFromLibrary(name) {
         if (!confirm("¿Eliminar este libro de la memoria?")) return;
         const transaction = db.transaction(["books"], "readwrite");
         transaction.objectStore("books").delete(name);
         transaction.oncomplete = () => {
             if (currentFileName === name) location.reload();
             else displayLibrary();
+        };
+    }
+
+    function downloadFromLibrary(name) {
+        const transaction = db.transaction(["books"], "readonly");
+        const store = transaction.objectStore("books");
+        store.get(name).onsuccess = (e) => {
+            if (e.target.result && e.target.result.data) {
+                const file = e.target.result.data;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(file);
+                a.download = name;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 100);
+            }
         };
     }
 
