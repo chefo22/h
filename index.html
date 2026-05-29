@@ -1028,7 +1028,7 @@
                     l: from.l + (to.l - from.l) * t
                 };
                 self.postMessage({ hex: hslToHex(hsl.h, hsl.s, hsl.l), hsl });
-                if (t >= 1) { clearInterval(anim); anim = null; }
+                if (t >= 1) { clearInterval(anim); anim = null; self.postMessage({ hex: hslToHex(to.h, to.s, to.l), hsl: { ...to }, done: true }); }
             }, 16);
         };
     `;
@@ -1036,19 +1036,20 @@
         URL.createObjectURL(new Blob([_workerCode], { type: 'application/javascript' }))
     );
     _colorWorker.onmessage = (e) => {
-        const { hex, hsl } = e.data;
-        _currentHSL = hsl;
+        const { hex, hsl, done } = e.data;
+        // Actualizamos _currentHSL solo con el último frame (done=true) para que
+        // siempre refleje el color visible real en pantalla, nunca un destino futuro
+        if (done) _currentHSL = hsl;
         document.documentElement.style.setProperty('--color-principal', hex);
         document.documentElement.style.setProperty('--color-principal-rgb', hexToRgb(hex));
     };
 
     function animateToColor(targetHex, durationMs = 900) {
         const targetHSL = hexToHSL(targetHex);
+        // Leemos el estado REAL actual (último frame recibido del Worker, no el destino anterior)
         const from = { ..._currentHSL };
-        // Actualizar estado inmediatamente para que el próximo cambio parta del punto correcto
-        _currentHSL = targetHSL;
-        // Arrancar la animación DESDE el color actual HACIA el destino en el Worker
-        // El Worker interpola suavemente entre ambos; el hilo principal aplica cada frame
+        // NO sobreescribimos _currentHSL aquí — el Worker lo actualizará frame a frame
+        // para que cualquier cambio encadenado parta siempre del color visible en pantalla
         _colorWorker.postMessage({ from, to: targetHSL, duration: durationMs });
     }
 
