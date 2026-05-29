@@ -35,7 +35,7 @@
             background-color: #050505;
             /* Usamos color-mix para que el degradado transicione suavemente gracias a @property */
             background-image: radial-gradient(circle at top, color-mix(in srgb, var(--color-principal), transparent 85%) 0%, #050505 100%);
-            transition: --color-principal 0.8s ease;
+            transition: --color-principal 1.5s cubic-bezier(0.1, 1, 0.1, 1);
             background-attachment: fixed;
             background-repeat: no-repeat;
             display: flex;
@@ -177,7 +177,7 @@
 
             .book-info h2 { font-size: 1.4rem; margin-top: 10px; }
             .progress-container { max-width: 400px; margin: 10px 0; }
-            .controls { max-width: 380px; gap: 15px; }
+            .controls { max-width: 380px; gap: 15px; justify-content: center; }
             #play-pause { width: 75px !important; height: 75px !important; }
 
             #quick-settings-row {
@@ -249,6 +249,9 @@
             gap: 20px;
             align-items: center;
             margin-bottom: 0px;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0 8px;
         }        button {
             background: none;
             border: none;
@@ -362,6 +365,8 @@
 
         #player-ui-container {
             transition: opacity 0.4s ease-in-out;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .play-btn {
@@ -651,7 +656,7 @@
                     </div>
                 </div>                <div style="background:#1c1c1c; padding:14px 18px; border-radius:16px; display:flex; justify-content:space-between; align-items:center;">
                     <div style="display:flex; align-items:center; gap:12px;">
-                        <i class="material-icons" style="color:#888; font-size:20px;">brightness_4</i>
+                        <i class="material-icons" style="color:#888; font-size:20px;">graphic_eq</i>
                         <span style="color:#ccc; font-size:0.9rem;">Modo Noche</span>
                     </div>
                     <label class="switch">
@@ -683,7 +688,7 @@
                 </div>                <div style="background:#1c1c1c; padding:14px 18px; border-radius:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div style="display:flex; align-items:center; gap:12px;">
-                            <i class="material-icons" style="color:var(--color-principal); font-size:20px;">notifications_active</i>
+                            <i class="material-icons" style="color:var(--color-principal); font-size:20px;">bedtime</i>
                             <span style="color:#ccc; font-size:0.9rem;">Aviso 5 min (Bip)</span>
                         </div>
                         <label class="switch">
@@ -723,7 +728,7 @@
                 <span id="current-time">0:00:00</span>
                 <span id="duration">0:00:00</span>
             </div>
-        </div>        <div class="controls" style="display: flex; justify-content: space-evenly; align-items: center; margin-top: 5px; padding: 0; width: 100%;">
+        </div>        <div class="controls" style="display: flex; justify-content: center; align-items: center; margin-top: 5px; padding: 0 8px; width: 100%; box-sizing: border-box; gap: 16px;">
             <button id="speed-display" onclick="openSpeedModal()" style="width: 48px; height: 48px; border-radius: 50%; background: color-mix(in srgb, var(--color-principal), transparent 90%); color: var(--color-principal); font-size: 0.9rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">1x</button>
             <button onclick="skip(-10)" style="width: 55px; height: 55px; border-radius: 50%; transition: background 0.1s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" onmousedown="this.style.background='rgba(var(--color-principal-rgb), 0.15)'" onmouseup="this.style.background='transparent'" onmouseleave="this.style.background='transparent'" ontouchstart="this.style.background='rgba(var(--color-principal-rgb), 0.15)'" ontouchend="this.style.background='transparent'">
                 <i class="material-icons" style="font-size: 35px; color: var(--color-principal);">replay_10</i>
@@ -740,7 +745,7 @@
         </div>
     </div>    <div id="quick-settings-row" style="display: none; justify-content: space-evenly; align-items: center; margin: 15px 10px 5px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.05);">
         <button onclick="document.getElementById('normalize-vol').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Modo Noche">
-            <i class="material-icons">brightness_4</i>
+            <i class="material-icons">graphic_eq</i>
         </button>
         <button onclick="document.getElementById('lock-seek').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Bloquear Seek">
             <i class="material-icons">lock</i>
@@ -751,7 +756,7 @@
         <button onclick="document.getElementById('next-as-timer').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Siguiente +5min">
             <i class="material-icons">more_time</i>
         </button>        <button onclick="document.getElementById('silence-beep').click(); this.classList.toggle('active-mode')" class="mode-btn" title="Bip Seguridad">
-            <i class="material-icons">notifications_active</i>
+            <i class="material-icons">bedtime</i>
         </button>
     </div>    <div id="chapters-wrapper-ui" style="display:none; position:fixed; bottom:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; align-items:flex-end; backdrop-filter: blur(10px);">
         <div id="chapters-content" style="width:100%; background:#161616; border-radius: 30px 30px 0 0; padding: 24px; box-sizing: border-box; animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-top: 1px solid #333; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
@@ -793,7 +798,7 @@
             </div>
             <h3 style="text-align:center; margin-bottom: 20px; font-size: 1.1rem;">Velocidad de Reproducción</h3>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <button onclick="setSpeed(0.8)" style="border:none; padding:15px; color:white; background:#1c1c1c; border-radius:12px;">0.8x</button>
+                <button onclick="setSpeed(0.9)" style="border:none; padding:15px; color:white; background:#1c1c1c; border-radius:12px;">0.9x</button>
                 <button onclick="setSpeed(1.0)" style="border:none; padding:15px; color:white; background:#1c1c1c; border-radius:12px;">Normal (1x)</button>
                 <button onclick="setSpeed(1.1)" style="border:none; padding:15px; color:white; background:#1c1c1c; border-radius:12px;">1.1x</button>
                 <button onclick="setSpeed(1.25)" style="border:none; padding:15px; color:white; background:#1c1c1c; border-radius:12px;">1.25x</button>
@@ -1057,6 +1062,11 @@
     let pressTimer;
     let draggedItem = null;
 
+    // Caché de colores dominantes por nombre de libro.
+    // Se rellena en segundo plano al renderizar la biblioteca (canvas sobre la carátula en base64).
+    // Permite aplicar el color al instante en el clic, sin esperar a cargar el audio ni releer la imagen.
+    const bookColorCache = {};
+
     function toggleSettings() {
         const modal = document.getElementById('settings-modal');
         const content = document.getElementById('settings-content');
@@ -1314,8 +1324,13 @@
                             list.classList.remove('reorder-mode');
                             return;
                         }
-                        loadFromLibrary(bookName);
-                    });
+                        // Aplicar el color dominante en el mismo instante del clic,
+                // sin esperar a que cargue el audio ni a que se relean los metadatos.
+                if (bookColorCache[bookName]) {
+                    setThemeColor(bookColorCache[bookName], false);
+                }
+                loadFromLibrary(bookName);
+            });
 
                     list.appendChild(card);                    // Aplicar Metadatos en Caché (Sin Bloqueo de Memoria)
                     if (bookData.metaTitle || bookData.metaArtist) {
@@ -1333,19 +1348,31 @@
                     if (bookData.metaCover) {
                         thumb.style.backgroundImage = `url(${bookData.metaCover})`;
                         const icon = thumb.querySelector('.material-icons');
-                        if (icon) icon.style.display = 'none';
-                        
-                        // Status Dot Camaleón Seguro
+                        if (icon) icon.style.display = 'none';                        // Status Dot Camaleón Seguro: Color dominante vibrante
                         const imgDot = new Image();
                         imgDot.src = bookData.metaCover;
                         imgDot.onload = () => {
                             const canvas = document.createElement('canvas');
                             const ctx = canvas.getContext('2d');
-                            canvas.width = 1; canvas.height = 1;
-                            ctx.drawImage(imgDot, 0, 0, 1, 1);
-                            const pix = ctx.getImageData(0, 0, 1, 1).data;
-                            if (pix[3] === 0) return;
-                            let r = pix[0]/255, g = pix[1]/255, b = pix[2]/255;
+                            canvas.width = 50; canvas.height = 50;
+                            ctx.drawImage(imgDot, 0, 0, 50, 50);
+                            const data = ctx.getImageData(0, 0, 50, 50).data;
+                            let counts = {}, maxCount = 0;
+                            let domR = 0, domG = 0, domB = 0;
+                            for (let i = 0; i < data.length; i += 16) {
+                                if (data[i+3] < 128) continue;
+                                let cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
+                                // Ignorar grises desaturados para el status dot y el autor
+                                if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
+                                let key = cR+','+cG+','+cB;
+                                counts[key] = (counts[key] || 0) + 1;
+                                if (counts[key] > maxCount) {
+                                    maxCount = counts[key];
+                                    domR = data[i]; domG = data[i+1]; domB = data[i+2];
+                                }
+                            }
+                            if(maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
+                            let r = domR/255, g = domG/255, b = domB/255;
                             let max = Math.max(r, g, b), min = Math.min(r, g, b);
                             let h, s, l = (max + min) / 2;
                             if (max === min) h = s = 0; 
@@ -1358,6 +1385,8 @@
                                 h /= 6;
                             }
                             const extractedColor = `hsl(${Math.round(h * 360) || 0}, ${Math.max(Math.round(s * 100), 70)}%, 60%)`;
+                            // Guardar en caché para poder aplicarlo al instante cuando el usuario haga clic
+                            bookColorCache[bookName] = extractedColor;
                             const dot = card.querySelector('.status-dot');
                             if (dot) dot.style.backgroundColor = extractedColor;
                             const secondLine = card.querySelector('.book-label div:nth-child(2)');
@@ -1506,9 +1535,7 @@
                             img.src = artworkUrl;
                             const miniThumb = document.getElementById('mini-player-thumb');
                             if(miniThumb) miniThumb.src = artworkUrl;
-                            document.getElementById('cover-container').style.display = 'block';
-                            
-                            // Efecto Camaleón Unificado: Muestreo 1x1 fiel a la portada
+                            document.getElementById('cover-container').style.display = 'block';                            // Efecto Camaleón Unificado: Muestreo de color dominante real
                             img.onload = function() {
                                 // Restauramos la nitidez de la nueva carátula
                                 img.style.filter = 'blur(0px)';
@@ -1516,11 +1543,26 @@
                                 try {
                                     const canvas = document.createElement('canvas');
                                     const ctx = canvas.getContext('2d');
-                                    canvas.width = 1; canvas.height = 1;
-                                    ctx.drawImage(img, 0, 0, 1, 1);
-                                    const pix = ctx.getImageData(0, 0, 1, 1).data;
+                                    canvas.width = 50; canvas.height = 50;
+                                    ctx.drawImage(img, 0, 0, 50, 50);
+                                    const data = ctx.getImageData(0, 0, 50, 50).data;
+                                    let counts = {}, maxCount = 0;
+                                    let domR = 0, domG = 0, domB = 0;
+                                    for (let i = 0; i < data.length; i += 16) {
+                                        if (data[i+3] < 128) continue;
+                                        let cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
+                                        // Ignorar grises desaturados para evitar un UI aburrido (buscamos un tema vibrante)
+                                        if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
+                                        let key = cR+','+cG+','+cB;
+                                        counts[key] = (counts[key] || 0) + 1;
+                                        if (counts[key] > maxCount) {
+                                            maxCount = counts[key];
+                                            domR = data[i]; domG = data[i+1]; domB = data[i+2];
+                                        }
+                                    }
+                                    if(maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
                                     
-                                    let r = pix[0]/255, g = pix[1]/255, b = pix[2]/255;
+                                    let r = domR/255, g = domG/255, b = domB/255;
                                     let max = Math.max(r, g, b), min = Math.min(r, g, b);
                                     let h, s, l = (max + min) / 2;
                                     if (max === min) h = s = 0; 
@@ -1550,6 +1592,8 @@
                                         const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0');
                                         return `#${toHex(f(p,q,h+1/3))}${toHex(f(p,q,h))}${toHex(f(p,q,h-1/3))}`;
                                     };                                    setThemeColor(hslToHex(finalH, finalS, finalL), false);
+                                    // Guardar en caché para el próximo clic en este libro
+                                    if (currentFileName) bookColorCache[currentFileName] = hslToHex(finalH, finalS, finalL);
                                 } catch (e) { console.error("Error en Chameleon Unificado:", e); }
                             };                        } else {
                             artworkUrl = generateRandomWaves();
@@ -2151,34 +2195,55 @@
         if (!box) return;
         if (chapStatus) chapStatus.innerText = `CAPÍTULOS DETECTADOS (${list.length})`;
         box.innerHTML = '';
+        
+        // Determinar el capítulo actual activo basándonos en el tiempo de reproducción
+        let activeIndex = -1;
+        const curTime = audio.currentTime;
+        for (let i = 0; i < list.length; i++) {
+            const startTime = list[i].time;
+            const endTime = list[i + 1] ? list[i + 1].time : audio.duration;
+            if (curTime >= startTime && curTime < endTime) {
+                activeIndex = i;
+                break;
+            }
+        }
+
         list.forEach((c, index) => {
             const div = document.createElement('div');
             div.className = 'chapter-row-item';
-            div.style.display = 'flex';
-            div.style.alignItems = 'center';
-            div.style.gap = '10px';
             
-            div.innerHTML = `
-                <div style="flex:1; display:flex; justify-content:space-between; align-items:center;" class="ch-text-info">
-                    <span>${c.name}</span>
-                    <span class="ch-time">${formatTime(c.time)}</span>
-                </div>
-                <button class="stop-ch-btn" style="color:#666; background:none; border:none; cursor:pointer; display:flex; align-items:center; padding:5px;" title="Pausar al terminar este capítulo">
-                    <i class="material-icons" style="font-size:20px;">update</i>
-                </button>
-            `;
+            // Resaltar visualmente si es el capítulo actual por el que va el usuario
+            if (index === activeIndex) {
+                div.style.background = 'color-mix(in srgb, var(--color-principal), transparent 85%)';
+                div.style.borderLeft = '4px solid var(--color-principal)';
+                div.style.color = '#ffffff';
+                div.style.fontWeight = '700';
+            }
 
-            div.querySelector('.ch-text-info').onclick = () => {
+            const formatTime = (secs) => {
+                const h = Math.floor(secs / 3600);
+                const m = Math.floor((secs % 3600) / 60);
+                const s = Math.floor(secs % 60);
+                return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            };
+
+            div.innerHTML = `<span style="flex:1; padding-right:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.name}</span>` +
+                            `<span class="ch-time">${formatTime(c.time)}</span>` +
+                            `<button class="stop-ch-btn" style="padding:4px 0 4px 12px; margin:0; color:${chapterStopPoint === (list[index+1]?.time || audio.duration) ? 'var(--color-principal)' : '#666'};" title="Detener al finalizar"><i class="material-icons" style="font-size:18px;">flag</i></button>`;
+
+            div.onclick = () => {
+                if (document.getElementById('lock-seek').checked) return;
                 audio.currentTime = c.time;
-                audio.play();
+                updateProgressFill();
                 closeChaptersModal();
-            };            const stopBtn = div.querySelector('.stop-ch-btn');
+            };
+
+            const stopBtn = div.querySelector('.stop-ch-btn');
             stopBtn.onclick = (e) => {
                 e.stopPropagation();
                 const nextC = list[index + 1];
                 const targetPoint = nextC ? nextC.time : audio.duration;
 
-                // Lógica de Toggle: Si ya es el punto de parada actual, se desactiva
                 if (chapterStopPoint === targetPoint) {
                     chapterStopPoint = null;
                     if(timerMsg) timerMsg.textContent = "";
@@ -2186,15 +2251,10 @@
                     if (navigator.vibrate) navigator.vibrate(30);
                 } else {
                     chapterStopPoint = targetPoint;
-                    
-                    // Limpiar otros temporizadores activos
                     clearTimeout(sleepTimerTimeout);
                     clearInterval(sleepTimerInterval);
                     document.getElementById('timer-icon').style.color = '#888';
-
                     if(timerMsg) timerMsg.textContent = "Se detendrá al finalizar: " + c.name;
-                    
-                    // Feedback visual de botones
                     document.querySelectorAll('.stop-ch-btn').forEach(b => b.style.color = '#666');
                     stopBtn.style.color = 'var(--color-principal)';
                     if (navigator.vibrate) navigator.vibrate(50);
@@ -2204,7 +2264,38 @@
 
             box.appendChild(div); 
         });
+        
+        // Agregar evento para actualizar el resaltado en tiempo real mientras el audio avanza
+        audio.removeEventListener('timeupdate', window._updateActiveChapterHighlight);
+        window._updateActiveChapterHighlight = () => {
+            const currentT = audio.currentTime;
+            let currentIdx = -1;
+            for (let i = 0; i < list.length; i++) {
+                const startTime = list[i].time;
+                const endTime = list[i + 1] ? list[i + 1].time : audio.duration;
+                if (currentT >= startTime && currentT < endTime) {
+                    currentIdx = i;
+                    break;
+                }
+            }
+            const rows = box.querySelectorAll('.chapter-row-item');
+            rows.forEach((row, idx) => {
+                if (idx === currentIdx) {
+                    row.style.background = 'color-mix(in srgb, var(--color-principal), transparent 85%)';
+                    row.style.borderLeft = '4px solid var(--color-principal)';
+                    row.style.color = '#ffffff';
+                    row.style.fontWeight = '700';
+                } else {
+                    row.style.background = '';
+                    row.style.borderLeft = '';
+                    row.style.color = '#cccccc';
+                    row.style.fontWeight = '';
+                }
+            });
+        };
+        audio.addEventListener('timeupdate', window._updateActiveChapterHighlight);
     }
+
 </script>
 
 </body>
