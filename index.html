@@ -1019,16 +1019,17 @@
             self.postMessage({ hex: hslToHex(from.h, from.s, from.l), hsl: { ...from } });
             const start = Date.now();
             anim = setInterval(() => {
-                let t = Math.min((Date.now() - start) / duration, 1);
+                const raw = Math.min((Date.now() - start) / duration, 1);
+                const done = raw >= 1;
                 // ease-out exponencial: arranca rápido, frena suave al llegar
-                t = 1 - Math.pow(1 - t, 3);
-                const hsl = {
-                    h: from.h + dH * t,
-                    s: from.s + (to.s - from.s) * t,
-                    l: from.l + (to.l - from.l) * t
-                };
-                self.postMessage({ hex: hslToHex(hsl.h, hsl.s, hsl.l), hsl });
-                if (t >= 1) { clearInterval(anim); anim = null; self.postMessage({ hex: hslToHex(to.h, to.s, to.l), hsl: { ...to }, done: true }); }
+                const t = 1 - Math.pow(1 - raw, 3);
+                // Cuando terminamos usamos exactamente {to} para evitar drift de redondeo
+                const hsl = done
+                    ? { ...to }
+                    : { h: from.h + dH * t, s: from.s + (to.s - from.s) * t, l: from.l + (to.l - from.l) * t };
+                // Un solo mensaje por tick, marcado con done=true en el último
+                self.postMessage({ hex: hslToHex(hsl.h, hsl.s, hsl.l), hsl, done });
+                if (done) { clearInterval(anim); anim = null; }
             }, 16);
         };
     `;
