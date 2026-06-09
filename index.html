@@ -21,13 +21,9 @@
             --color-principal: #4a90e2;
             /* Definimos una curva de suavizado pro para todos los elementos */
             --transition-ui: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Aplicamos la fluidez solo a las propiedades de color de los elementos clave */
-        #title, #author, .play-btn, .time-display, i.material-icons, 
-        .status-dot, .mode-btn, #timer-msg, .chapters-header-title, 
-        .ch-time, .book-label div, #speed-display {
-            transition: color var(--transition-ui), background-color var(--transition-ui), border-color var(--transition-ui), box-shadow var(--transition-ui);
+        }        /* Transición global coordinada y fluida para todos los elementos de la interfaz a la vez */
+        *, *::before, *::after {
+            transition: color var(--transition-ui), background-color var(--transition-ui), border-color var(--transition-ui), box-shadow var(--transition-ui), background-image var(--transition-ui);
         }
 
         body {
