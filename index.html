@@ -1764,9 +1764,17 @@
             if(chapWrapper && chapBox) {
                 chapStatus.innerText = 'Analizando estructura...';
                 chapBox.innerHTML = '<div style="padding:15px; color:#888; text-align:center; font-size:0.85rem;"><i class="material-icons" style="font-size:18px; vertical-align:middle; margin-right:5px; animation: pulse 1.5s infinite;">hourglass_empty</i>Leyendo binarios...</div>';
-            }
-            
-            setTimeout(() => { if(typeof analyzeChaptersBinary === 'function') analyzeChaptersBinary(file); }, 200);
+            }            // Carga de capítulos en segundo plano, después de que la UI esté fluida
+            const scheduleChaptersLoad = () => {
+                if (typeof analyzeChaptersBinary === 'function') {
+                    if (window.requestIdleCallback) {
+                        requestIdleCallback(() => analyzeChaptersBinary(file), { timeout: 2000 });
+                    } else {
+                        setTimeout(() => analyzeChaptersBinary(file), 1200);
+                    }
+                }
+            };
+            setTimeout(scheduleChaptersLoad, 500);
             
             // Mostrar la fila de ajustes rápidos al cargar un archivo
             document.getElementById('quick-settings-row').style.display = 'flex';        playPauseBtn.innerHTML = '<i class="material-icons" style="font-size: 2.5rem;">play_arrow</i>';
