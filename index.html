@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/megajs@1/dist/main.browser-umd.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -699,15 +700,84 @@
     </div>    <div id="library-container" style="margin-bottom: 10px; text-align: center; position: relative;">
         <h3 ondblclick="setThemeColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'))" style="font-size: 0.65rem; margin: 0 0 10px 0; color: var(--color-principal); display: flex; justify-content: center; align-items: center; letter-spacing: 4px; opacity: 0.6; font-weight: 900; text-indent: 4px; cursor: pointer; user-select: none;">
             BIBLIOTECA
-        </h3>        <div id="library-list">
+        </h3>        <div class="st-top">
+            <i class="material-icons st-ic" style="color:var(--color-principal)" onclick="importFromDevice()">add_circle_outline</i>
+            <i class="material-icons st-ic" onclick="toggleStoreSearch()">search</i>
+            <i class="material-icons st-ic" onclick="loadStore(false)">refresh</i>
+            <i class="material-icons st-ic" onclick="toggleStoreConfig()">link</i>
+        </div>
+        <div id="st-cfg">
+            <input id="store-url" type="password" autocomplete="off" placeholder="Enlace de la tienda">
+            <button class="st-btn" onclick="loadStore(true)">Guardar</button>
+            <button class="st-btn" style="background:#2a2a2a" onclick="buildCatalog()">Generar catálogo</button>
+        </div>
+        <input id="st-q" placeholder="Buscar en la tienda" oninput="renderStore()">
+        <div id="store-status"></div>
+        <div id="library-list">
             <div style="grid-column: 1 / -1; padding: 60px 20px; color: #444; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%;">
                 <i class="material-icons" style="font-size: 48px; opacity: 0.1; animation: pulse 2s infinite;">auto_stories</i>
                 <small style="font-weight: 700; letter-spacing: 3px; font-size: 0.6rem; opacity: 0.3; text-transform: uppercase;">Organizando Colección</small>
             </div>
         </div>
+        <div id="store-section">
+            <h3 style="font-size:.65rem;margin:18px 0 0;color:var(--color-principal);letter-spacing:4px;opacity:.6;font-weight:900;text-align:center;text-indent:4px;">TIENDA</h3>
+            <div id="st-body"></div>
+        </div>
     </div>
 
-    <audio id="audio-player"></audio>    <div id="player-ui-container" style="display: none; position: relative;">
+    <audio id="audio-player"></audio>
+    <style>
+.player-container:not(.player-active) #library-container{max-height:82dvh;overflow-y:auto;scrollbar-width:none}
+.player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
+.player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
+.player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status{display:none!important}
+.st-top{display:flex;justify-content:center;gap:22px;padding:0 0 6px}
+.st-ic{color:#bbb;font-size:22px;cursor:pointer}
+#st-cfg{display:none;gap:8px;padding:4px 4px 8px;flex-wrap:wrap}
+#st-cfg input,#st-q{flex:1;min-width:0;background:#1c1c1c;border:1px solid #333;color:#eee;border-radius:10px;padding:10px 12px;font-size:.85rem}
+#st-edit input{background:#1c1c1c;border:1px solid #333;color:#eee;border-radius:10px;padding:10px 12px;font-size:.85rem;width:100%;box-sizing:border-box}
+#st-q{display:none;margin:0 0 8px;width:100%;box-sizing:border-box}
+.st-btn{background:var(--color-principal);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:.85rem}
+.st-btn:disabled{background:#2a2a2a;color:#888}
+#store-status{color:#888;font-size:.72rem;padding:0 0 6px}
+#store-section{display:none;padding-bottom:90px;text-align:left}
+.st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
+.st-scroll{display:flex;gap:10px;overflow-x:auto;padding:0 0 4px;scrollbar-width:none}
+.st-scroll::-webkit-scrollbar{display:none}
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+.st-card{flex:none;width:104px;cursor:pointer}
+.st-grid .st-card{width:auto}
+.st-cover{width:100%;aspect-ratio:1;border-radius:10px;background:#1a1a1a center/cover;position:relative}
+.st-card:active .st-cover{transform:scale(.96)}
+.st-own{position:absolute;right:5px;top:5px;font-size:18px;color:#fff;background:var(--color-principal);border-radius:50%}
+.st-t{font-size:.72rem;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-card small{display:block;color:#888;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-ht{font-size:1.15rem;font-weight:800;line-height:1.2}
+.st-ha{color:#bbb;font-size:.8rem}
+#st-sheet{display:none;position:fixed;inset:0;z-index:2200;background:#000a;align-items:flex-end}
+.st-sheetbox{width:100%;max-width:480px;margin:0 auto;background:#161616;border-radius:24px 24px 0 0;padding:20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.st-sheetbox .st-cover{width:60%;max-width:240px}
+</style>
+    <div id="st-sheet" onclick="if(event.target===this)this.style.display='none'">
+        <div class="st-sheetbox">
+            <div class="st-cover"></div>
+            <div class="st-ht st-dt" style="margin-top:10px"></div>
+            <div class="st-ha st-da"></div>
+            <div class="st-ha st-di" style="margin-bottom:8px"></div>
+            <div id="st-edit" style="display:none;width:100%;flex-direction:column;gap:8px;margin-bottom:8px">
+                <input id="st-et" placeholder="Título">
+                <input id="st-ea" placeholder="Autor">
+                <div style="display:flex;gap:8px">
+                    <button class="st-btn" id="st-esw" style="flex:1;background:#2a2a2a">⇄ INTERCAMBIAR</button>
+                    <button class="st-btn" id="st-ers" style="flex:1;background:#2a2a2a">RESTAURAR</button>
+                </div>
+                <button class="st-btn" id="st-esv" style="width:100%">GUARDAR</button>
+            </div>
+            <button class="st-btn" id="st-ed" style="width:100%;background:#2a2a2a;margin-bottom:4px">✎ EDITAR TÍTULO Y AUTOR</button>
+            <button class="st-btn" id="st-dl" style="width:100%;padding:14px">DESCARGAR</button>
+        </div>
+    </div>
+    <div id="player-ui-container" style="display: none; position: relative;">
         <div class="book-info">
             <div id="cover-container" style="margin-bottom: 20px; display: none;">
                 <img id="cover-art" src="" alt="Portada" style="width: 270px; height: 270px; object-fit: cover; border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); filter: blur(0px); transform: scale(1);">
@@ -1244,10 +1314,7 @@
 
             let cleanName = file.name.replace(/\.[^/.]+$/, "").toUpperCase();
             let tPart = cleanName, aPart = "GUARDANDO...";
-            if (cleanName.includes("-")) {
-                const p = cleanName.split("-").map(x => x.trim());
-                tPart = p[0]; aPart = p[1];
-            }
+            if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }
 
             const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';
             const spacer = "&nbsp;".repeat(10);
@@ -1265,7 +1332,7 @@
             `;
             
             const addCard = list.lastElementChild;
-            if(addCard && addCard.innerHTML.includes('add_circle_outline')) {
+            if(addCard && addCard.innerHTML.includes('storefront')) {
                 list.insertBefore(tempCard, addCard);
             } else {
                 list.appendChild(tempCard);
@@ -1274,6 +1341,9 @@
         // --------------------------------------------------------
         
         const doSave = (meta) => {
+            if (!meta.cover && file._storeCover) meta.cover = file._storeCover;
+            if (file._storeTitle) meta.title = file._storeTitle;
+            if (file._storeAuthor) meta.artist = file._storeAuthor;
             // Actualizar UI optimista con carátula real ANTES del guardado IDB pesado
             if (tempCard) {
                 if (meta.cover) tempCard.querySelector('.book-thumb').style.backgroundImage = `url(${meta.cover})`;
@@ -1364,10 +1434,7 @@
                     const progress = localStorage.getItem('audiobook_progress_' + bookName);
                     const cleanName = bookName.replace(/\.[^/.]+$/, "").toUpperCase();
                     let tPart = cleanName, aPart = "";
-                    if (cleanName.includes("-")) {
-                        const p = cleanName.split("-").map(x => x.trim());
-                        tPart = p[0]; aPart = p[1];
-                    }                    const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
+                    if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
                     const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
                     const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
@@ -1518,34 +1585,14 @@
                         if (icon) icon.style.display = 'none';
                     }
                 });                // Añadir tarjeta de carga al final de la lista
-                const addCard = document.createElement('div');
-                addCard.className = 'book-card';
-                addCard.innerHTML = `
-                    <div class="book-thumb" style="border: 2px dashed color-mix(in srgb, var(--color-principal), transparent 70%); background: color-mix(in srgb, var(--color-principal), transparent 97%); display: flex; align-items: center; justify-content: center;">
-                        <i class="material-icons" style="font-size: 2.2rem; color: var(--color-principal); opacity: 0.5;">add_circle_outline</i>
-                    </div>
-                    <div class="book-label">
-                        <div class="marquee-container"><span class="marquee-text" style="color: var(--color-principal); font-weight: 800;">AÑADIR</span></div>
-                        <div class="marquee-container" style="opacity: 0.5;"><span class="marquee-text">NUEVO LIBRO</span></div>
-                    </div>
-                `;
-                
-                addCard.onclick = () => {
-                    if (reorderMode) {
-                        reorderMode = false;
-                        list.classList.remove('reorder-mode');
-                        return;
-                    }
-                    document.getElementById('file-input').click();
-                };
-                list.appendChild(addCard);
 
                 if (books.length === 0) {
                     const emptyHint = document.createElement('div');
                     emptyHint.style.cssText = "grid-column: 1 / -1; margin-bottom: 10px; opacity: 0.2; font-size: 0.6rem; font-weight: 900; letter-spacing: 3px;";
                     emptyHint.textContent = "BIBLIOTECA VACÍA";
-                    list.insertBefore(emptyHint, addCard);
+                    list.appendChild(emptyHint);
                 }
+                if (typeof storeDlRestore === 'function') storeDlRestore();
             }
         };
     }    function deleteFromLibrary(name) {
@@ -1606,15 +1653,11 @@
             fileLabel.textContent = "Libro: " + (currentFileName.length > 15 ? currentFileName.substring(0,12) + "..." : currentFileName);            // 1. Limpiar nombre del archivo (quitar extensión)
             const fileNameNoExt = currentFileName.replace(/\.[^/.]+$/, "");
             
-            // 2. Lógica de separación: Título - Artista
+            // 2. Lógica de separación: Autor - Título
             let displayTitle = fileNameNoExt;
             let displayArtist = "Autor Desconocido";
 
-            if (fileNameNoExt.includes("-")) {
-                const parts = fileNameNoExt.split("-");
-                displayTitle = parts[0].trim();
-                displayArtist = parts[1].trim();
-            }            // Aplicar al UI (asegurando limpieza de la extensión .mp3)
+            if (fileNameNoExt.includes("-")) { const r = splitAT(fileNameNoExt); displayTitle = r[0]; displayArtist = r[1]; }            // Aplicar al UI (asegurando limpieza de la extensión .mp3)
             titleEl.textContent = displayTitle.toUpperCase();
             document.getElementById('author').textContent = displayArtist;
             
@@ -1639,9 +1682,9 @@
                         if (title) {
                             title = title.replace(/\.[^/.]+$/, "");
                             if (title.includes("-") && (!artist || artist === "Autor Desconocido")) {
-                                const tParts = title.split("-");
-                                title = tParts[0].trim();
-                                artist = tParts[1].trim();
+                                const r = splitAT(title);
+                                title = r[0];
+                                artist = r[1];
                             }
                             titleEl.textContent = title.toUpperCase();
                         }
@@ -2429,6 +2472,642 @@
         audio.addEventListener('timeupdate', window._updateActiveChapterHighlight);
     }
 
+</script>
+
+
+<script>
+    // ── TIENDA (MEGA) ─────────────────────────────────────────────────
+    // Pon aquí tu enlace de carpeta pública de MEGA (o pégalo en el modal).
+    const DEFAULT_STORE_URL = "";
+    const AUDIO_EXT = /\.(mp3|m4a|m4b|mp4|ogg|opus|wav|flac|aac)$/i;
+    const MIME = { mp3:'audio/mpeg', m4a:'audio/mp4', m4b:'audio/mp4', mp4:'audio/mp4', ogg:'audio/ogg', opus:'audio/ogg', wav:'audio/wav', flac:'audio/flac', aac:'audio/aac' };
+    let storeFiles = [];
+
+    function toggleStoreConfig() { const c = document.getElementById('st-cfg'); c.style.display = c.style.display === 'flex' ? 'none' : 'flex'; }
+    function toggleStoreSearch() { const q = document.getElementById('st-q'); q.style.display = q.style.display === 'block' ? 'none' : 'block'; if (q.style.display === 'block') q.focus(); else { q.value = ""; renderStore(); } }
+    function importFromDevice() { document.getElementById('file-input').click(); }
+    async function initStore() {
+        try {
+            const e = await dbGet("settings", "storeUrl");
+            const u = (e && e.value) || DEFAULT_STORE_URL;
+            document.getElementById('store-url').value = u || "";
+            if (u) loadStore();
+            else document.getElementById('store-status').textContent = "Toca el icono de enlace para conectar tu tienda.";
+        } catch (err) {}
+    }
+    const _storeWait = setInterval(() => { if (typeof db !== 'undefined' && db) { clearInterval(_storeWait); initStore(); } }, 300);
+
+
+    const IMG_EXT = /\.(jpe?g|png|webp)$/i;
+    let storeCovers = {}, storeCatalogNode = null, storeCatalog = {}, storeItems = [];
+    function storeCollect(node, out, imgs) {
+        (node.children || []).forEach(c => {
+            const n = c.name || "";
+            if (c.directory) storeCollect(c, out, imgs);
+            else if (AUDIO_EXT.test(n)) out.push(c);
+            else if (/^catalog\.json$/i.test(n)) storeCatalogNode = c;
+            else if (IMG_EXT.test(n)) imgs[n.replace(/\.[^/.]+$/, "").toLowerCase()] = c;
+        });
+        return out;
+    }
+
+    async function loadStore(save) {
+        const url = document.getElementById('store-url').value.trim();
+        const status = document.getElementById('store-status');
+        if (!url) { status.textContent = "Configura el enlace de la tienda."; document.getElementById('st-cfg').style.display = 'flex'; return; }
+        if (!window.mega) { status.textContent = "No se pudo cargar megajs (revisa tu conexión)."; return; }
+        status.textContent = "Cargando tienda...";
+        try {
+            if (save) { await dbPut("settings", { key: "storeUrl", value: url }); document.getElementById('st-cfg').style.display = 'none'; }
+            const folder = mega.File.fromURL(url);
+            await folder.loadAttributes();
+            const imgs = {}; storeCatalogNode = null;
+            const files = storeCollect(folder, [], imgs);
+            storeCovers = imgs; storeFiles = files; storeCatalog = {};
+            // catálogo: un único archivo pequeño con portadas y metadatos, guardado en caché
+            if (storeCatalogNode) {
+                const stamp = storeCatalogNode.size + ":" + (storeCatalogNode.timestamp || 0);
+                let c = null; try { c = await dbGet("settings", "storeCatalog"); } catch (e) {}
+                if (c && c.value && c.value.stamp === stamp) storeCatalog = c.value.data;
+                else {
+                    storeCatalog = JSON.parse(await (await megaBlob(storeCatalogNode)).text());
+                    dbPut("settings", { key: "storeCatalog", value: { stamp, data: storeCatalog } }).catch(() => {});
+                }
+            }
+            try { const e = await dbGet("settings", "storeMeta"); storeMeta = (e && e.value) || {}; } catch (e) { storeMeta = {}; }
+            storeItems = files.map(f => {
+                const m = parseStoreName(f.name), c = storeCatalog[f.name] || {};
+                return { f, t0: c.t || m.title, a0: c.a || m.author, title: '', author: '', cover: c.cv || null, chapters: c.ch || null, ts: f.timestamp || 0, tried: !!storeCatalogNode };
+            });
+            applyMeta();
+            status.textContent = storeCatalogNode ? "" : "Sin catalog.json: las portadas se buscan una a una. Genera el catálogo (icono de enlace).";
+            renderStore();
+        } catch (e) {
+            console.error(e);
+            status.textContent = "Error: " + (e.message || e);
+        }
+    }
+
+    function storeOwned() {
+        return new Promise(res => {
+            const keys = [];
+            db.transaction(["books"], "readonly").objectStore("books").openCursor().onsuccess = ev => {
+                const c = ev.target.result;
+                if (c) { keys.push(c.key); c.continue(); } else res(keys);
+            };
+        });
+    }
+
+    let storeSheetIt = null, storeSwap = true, storeOwnedSet = [], storeMeta = {}, storeSwapAll = false;
+    // nombre de archivo -> [título, autor]; convención: "Autor - Título"
+    function splitAT(name) {
+        const p = name.split(/\s+-\s+/).length > 1 ? name.split(/\s+-\s+/) : name.split("-");
+        const q = p.map(x => x.trim()).filter(Boolean);
+        return q.length >= 2 ? [q.slice(1).join(" - "), q[0]] : [name, ""];
+    }
+    // título/autor mostrados = corrección manual > intercambio global > valor original
+    function applyMeta() {
+        storeItems.forEach(it => {
+            const o = storeMeta[it.f.name];
+            if (o) { it.title = o.t; it.author = o.a; }
+            else { it.title = it.t0; it.author = it.a0; }
+        });
+    }
+    function parseStoreName(name) {
+        const clean = name.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim();
+        const m = clean.split(/\s+-\s+|\s*-\s*/).map(x => x.trim()).filter(Boolean);
+        let title = clean, author = "Sin autor";
+        const volRe = /^(?:(?:libro|vol(?:umen)?\.?|parte|tomo|book|episodio|n[ºo°]\.?|#)\s*)?(?:\d+|[ivxlc]+)$/i;
+        if (m.length >= 3 && !storeSwap && volRe.test(m[1])) { title = m[0] + " " + m[1]; author = m.slice(2).join(" - "); }
+        else if (m.length >= 2) { title = storeSwap ? m.slice(1).join(" - ") : m[0]; author = storeSwap ? m[0] : m.slice(1).join(" - "); }
+        return { title, author };
+    }
+    const cmpEs = (x, y) => x.localeCompare(y, 'es', { sensitivity: 'base', numeric: true });
+    const coverUrl = it => 'url(' + (it.cover || generateRandomWaves()) + ')';
+
+    function mkCard(it, obs) {
+        const d = document.createElement('div'); d.className = 'st-card';
+        d.innerHTML = '<div class="st-cover"></div><div class="st-t"></div><small></small>';
+        d.firstChild.style.backgroundImage = coverUrl(it);
+        if (storeOwnedSet.includes(it.f.name)) d.firstChild.innerHTML = '<i class="material-icons st-own">check</i>';
+        d.children[1].textContent = it.title; d.children[2].textContent = it.author;
+        d.onclick = () => openDetail(it);
+        if (!it.cover && !it.tried) { d._it = it; obs.observe(d); }
+        return d;
+    }
+    async function lazyCover(d) {
+        const it = d._it; it.tried = true;
+        const [u, ch] = await withSlot(() => Promise.all([getStoreCover(it), getStoreChapters(it)]));
+        it.chapters = ch;
+        if (u) { it.cover = u; d.firstChild.style.backgroundImage = coverUrl(it); }
+    }
+
+    // ── Agrupación automática ─────────────────────────────────────────
+    const STOPW = new Set(['el','la','los','las','un','una','unos','unas','de','del','y','e','en','a','al','the','of','and','a','o','u']);
+    const normT = t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\(\[].*?[\)\]]/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const sigW = t => normT(t).split(' ').filter(w => w && !STOPW.has(w));
+    const bucket = (items, keyFn) => {
+        const m = {};
+        items.forEach(i => { const k = keyFn(i); if (k) (m[k] = m[k] || []).push(i); });
+        return Object.values(m);
+    };
+    // nombre de una saga: prefijo común de los títulos, sin conectores sueltos al final
+    function commonName(list) {
+        let p = list[0].title;
+        list.forEach(i => { let k = 0; while (k < p.length && k < i.title.length && p[k].toLowerCase() === i.title[k].toLowerCase()) k++; p = p.slice(0, k); });
+        if (list.some(i => i.title.length > p.length && !/[\s:,\-–]/.test(i.title[p.length]))) p = p.slice(0, Math.max(p.lastIndexOf(' '), 0));
+        const w = p.replace(/[\s:,\-–]+$/, '').split(' ');
+        while (w.length > 1 && STOPW.has(normT(w[w.length - 1]))) w.pop();
+        return w.join(' ').replace(/[\s:,\-–]+$/, '') || sigW(list[0].title).slice(0, 2).join(' ');
+    }
+    // devuelve [{name, list}] según lo que se detecte; mínimo 2 libros (3 para sagas por prefijo)
+    // clave de "misma obra": título sin ruido, pero conservando el número de tomo aunque vaya entre paréntesis
+    const verKey = t => {
+        const base = sigW(t).join(' ');
+        const par = (t.match(/[\(\[][^\)\]]*[\)\]]/g) || []).join(' ').toLowerCase();
+        const nums = (par.match(/\d+/g) || []).concat((par.match(/\b(?:libro|vol(?:umen)?\.?|parte|tomo|book)\s+[ivxlc]+\b/g) || []).map(x => x.split(/\s+/).pop()));
+        return nums.length ? base + ' #' + nums.join('.') : base;
+    };
+    function storeGroups(items) {
+        const sagas = [], seen = new Set();
+        const sigOf = list => list.map(i => i.f.name).sort().join('|');
+        const addTo = (arr, name, list) => {
+            const sig = sigOf(list);
+            if (seen.has(sig)) return; seen.add(sig); arr.push({ name, list });
+        };
+        // 1) sagas: título con número ("Libro 2", "Vol. 3"...) o primeras palabras en común
+        const stem = t => { const r = t.replace(/\s*[,:\-–]?\s*\b(libro|vol(?:umen)?\.?|parte|tomo|book|episodio|n[ºo°]\.?|#)\s*\d+\b.*$/i, '').replace(/\s+\d{1,2}$/, ''); return r !== t && r.length >= 3 ? r : null; };
+        bucket(items, i => { const s = stem(i.title); return s && normT(s); }).filter(l => l.length >= 2)
+            .forEach(l => addTo(sagas, stem(l[0].title) + ' · saga', l));
+        bucket(items, i => { const w = sigW(i.title); return w.length >= 3 && w.slice(0, 2).join(' ').length >= 8 ? w.slice(0, 2).join(' ') : null; })
+            .filter(l => l.length >= 3 && new Set(l.map(i => verKey(i.title))).size >= 2)
+            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(sagas, commonName(l) + ' · saga', l));
+        // 2) mismo título (otras traducciones, voces, ediciones), salvo que ya esté dentro de una saga
+        const inSaga = list => sagas.some(g => { const s = new Set(g.list.map(i => i.f.name)); return list.every(i => s.has(i.f.name)); });
+        const vers = [];
+        bucket(items, i => verKey(i.title)).filter(l => l.length >= 2 && sigW(l[0].title).join('').length >= 3)
+            .filter(l => !inSaga(l))
+            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(vers, l[0].title + ' · ' + l.length + ' versiones', l));
+        // 3) mismo autor
+        const aut = [];
+        bucket(items, i => i.author !== 'Sin autor' && i.author.toLowerCase()).filter(l => l.length >= 2)
+            .sort((x, y) => cmpEs(x[0].author, y[0].author)).forEach(l => addTo(aut, l[0].author, l));
+        return [...vers, ...sagas, ...aut];
+    }
+
+    async function renderStore() {
+        const body = document.getElementById('st-body');
+        storeOwnedSet = await storeOwned();
+        const q = document.getElementById('st-q').value.toLowerCase().trim();
+        const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { obs.unobserve(e.target); lazyCover(e.target); } }), { rootMargin: '200px' });
+        body.innerHTML = '';
+        document.getElementById('store-section').style.display = storeItems.length ? 'block' : 'none';
+        const row = (title, list, grid) => {
+            if (!list.length) return;
+            const r = document.createElement('div'); r.className = 'st-row';
+            r.innerHTML = '<h4></h4><div class="' + (grid ? 'st-grid' : 'st-scroll') + '"></div>';
+            r.firstChild.textContent = title;
+            list.forEach(it => r.lastChild.appendChild(mkCard(it, obs)));
+            body.appendChild(r);
+        };
+        const byTitle = (x, y) => cmpEs(x.title, y.title);
+        if (q) { row('Resultados', storeItems.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
+        const used = new Set();
+        storeGroups(storeItems).forEach(g => { g.list.forEach(i => used.add(i.f.name)); row(g.name, g.list.sort(byTitle)); });
+        row('Más audiolibros', storeItems.filter(i => !used.has(i.f.name)).sort(byTitle));
+    }
+
+    function megaBlob(node) {
+        return new Promise((res, rej) => {
+            const ch = [];
+            const st = node.download();
+            st.on('data', c => ch.push(c));
+            st.on('error', rej);
+            st.on('end', () => res(new Blob(ch)));
+        });
+    }
+    function blobToDataURL(b) {
+        return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+    }
+
+    // Descarga solo un rango de bytes del archivo en MEGA
+    function rangeBlob(node, start, end) {
+        return new Promise((res, rej) => {
+            const ch = [];
+            const st = node.download({ start, end });
+            st.on('data', c => ch.push(c));
+            st.on('error', rej);
+            st.on('end', () => res(new Blob(ch)));
+        });
+    }
+
+    // Descarga desde el inicio y corta al llegar a "max" bytes (respaldo si el rango falla)
+    function headBlob(node, max) {
+        return new Promise((res, rej) => {
+            const ch = []; let n = 0, done = false;
+            const st = node.download();
+            const fin = () => { if (done) return; done = true; try { st.destroy && st.destroy(); } catch (e) {} res(new Blob(ch)); };
+            st.on('data', c => { ch.push(c); n += c.length; if (n >= max) fin(); });
+            st.on('end', fin);
+            st.on('error', e => { if (!done) { done = true; rej(e); } });
+        });
+    }
+
+    // Porcentaje del audio que se descarga para buscar la portada (mín. 3 MB, máx. 80 MB)
+    const COVER_PERCENT = 5;
+    const coverBytes = total => Math.min(Math.max(Math.floor(total * COVER_PERCENT / 100), 3 * 1048576), 80 * 1048576);
+
+    const u32 = (b, i) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+    const fourcc = (b, i) => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
+
+    // M4A/M4B: busca ftyp + moov en lo descargado; si el moov está al final, lo pide aparte
+    async function mp4Assemble(node, bytes, total, D) {
+        const parts = []; let off = 0;
+        while (off + 8 <= bytes.length) {
+            let size = u32(bytes, off);
+            const type = fourcc(bytes, off + 4);
+            if (size === 1 && off + 16 <= bytes.length) size = u32(bytes, off + 8) * 4294967296 + u32(bytes, off + 12);
+            if (size === 0) size = total - off;
+            if (size < 8) break;
+            if (type === 'ftyp') parts.push(bytes.slice(off, off + size));
+            if (type === 'moov') {
+                if (off + size <= bytes.length) { D("moov dentro del " + COVER_PERCENT + "% inicial"); parts.push(bytes.slice(off, off + size)); return new Blob(parts); }
+                if (size > 80 * 1048576) { D("moov demasiado grande"); return null; }
+                parts.push(await rangeBlob(node, off, Math.min(off + size + 1, total)));
+                return new Blob(parts);
+            }
+            if (type === 'mdat' && off + size > bytes.length) {
+                // moov al final: primero el trozo exacto tras el mdat, si no el final del archivo
+                const ms = off + size;
+                if (total - ms > 0 && total - ms <= 80 * 1048576) {
+                    try { D("moov al final, descargo " + Math.round((total - ms) / 1024) + " KB"); parts.push(await rangeBlob(node, ms, total)); return new Blob(parts); }
+                    catch (e) { D("rango del final falló: " + (e && e.message || e)); }
+                }
+                const tail = new Uint8Array(await (await rangeBlob(node, Math.max(0, total - coverBytes(total)), total)).arrayBuffer());
+                for (let i = 4; i + 12 <= tail.length; i++) {
+                    if (fourcc(tail, i) === 'moov' && fourcc(tail, i + 8) === 'mvhd' && i - 4 + u32(tail, i - 4) <= tail.length) {
+                        parts.push(tail.slice(i - 4, i - 4 + u32(tail, i - 4)));
+                        return new Blob(parts);
+                    }
+                }
+                D("no hallé el moov en el " + COVER_PERCENT + "% final");
+                return null;
+            }
+            off += size;
+        }
+        D("no hallé el moov en el " + COVER_PERCENT + "% inicial");
+        return null;
+    }
+
+    const storeDiag = {};
+    const synchsafe = (b, i) => ((b[i] & 127) << 21) | ((b[i + 1] & 127) << 14) | ((b[i + 2] & 127) << 7) | (b[i + 3] & 127);
+
+    // M4A/M4B: capítulos tipo Nero (chpl) o pista de capítulos de QuickTime (tref/chap)
+    function mp4Chapters(b) {
+        const find = (str, from) => {
+            const c = [...str].map(x => x.charCodeAt(0));
+            for (let i = b.indexOf(c[0], from || 0); i !== -1 && i + 4 <= b.length; i = b.indexOf(c[0], i + 1))
+                if (b[i + 1] === c[1] && b[i + 2] === c[2] && b[i + 3] === c[3]) return i;
+            return -1;
+        };
+        const o = find("chpl");
+        if (o !== -1 && o + 13 <= b.length) {
+            let n = b[o + 12]; if (n === 0) n = b[o + 9];
+            if (n > 0) return { has: true, n, kind: "chpl" };
+        }
+        const t = find("tref");
+        if (t !== -1 && t + 12 <= b.length && fourcc(b, t + 8) === "chap") return { has: true, n: null, kind: "pista" };
+        return { has: false };
+    }
+
+    // MP3: frames CHAP de la etiqueta ID3v2
+    function id3Chapters(b) {
+        if (!(b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33)) return null;
+        const v = b[3], end = Math.min(b.length, 10 + synchsafe(b, 6));
+        let pos = 10, n = 0;
+        if (b[5] & 0x40) pos = 10 + (v >= 4 ? synchsafe(b, 10) : u32(b, 10) + 4);
+        while (pos + 10 <= end && b[pos] !== 0) {
+            const sz = v >= 4 ? synchsafe(b, pos + 4) : u32(b, pos + 4);
+            if (fourcc(b, pos) === "CHAP") n++;
+            pos += 10 + sz;
+        }
+        return n > 0 ? { has: true, n, kind: "id3" } : { has: false };
+    }
+
+    // Archivo local (libros ya descargados) con la misma interfaz que un nodo de MEGA
+    function localNode(file) {
+        return { name: file.name, size: file.size, download(o) {
+            o = o || {};
+            const st = { h: {}, on(e, f) { this.h[e] = f; return this; }, destroy() {} };
+            setTimeout(async () => {
+                try {
+                    const bl = file.slice(o.start || 0, o.end != null ? o.end : Math.min(file.size, 80 * 1048576));
+                    if (st.h.data) st.h.data(new Uint8Array(await bl.arrayBuffer()));
+                    if (st.h.end) st.h.end();
+                } catch (e) { if (st.h.error) st.h.error(e); }
+            }, 0);
+            return st;
+        } };
+    }
+    function localBookRecord(name) {
+        return new Promise(res => {
+            try { db.transaction(["books"], "readonly").objectStore("books").get(name).onsuccess = e => res(e.target.result || null); }
+            catch (e) { res(null); }
+        });
+    }
+
+    // Una sola descarga parcial por libro: de ahí salen la portada y los capítulos
+    const storeAnalysis = {};
+    function analyzeOnce(it, force) {
+        const k = it.f.name;
+        if (force) delete storeAnalysis[k];
+        if (!storeAnalysis[k]) storeAnalysis[k] = analyzeNode(it).catch(e => { delete storeAnalysis[k]; throw e; });
+        return storeAnalysis[k];
+    }
+
+    async function analyzeNode(it) {
+        const rec = await localBookRecord(it.f.name);
+        const node = rec && rec.data ? localNode(rec.data) : it.f;
+        const D = m => { storeDiag[it.f.name] = m; console.log("[tienda] " + it.f.name + ": " + m); };
+        const total = node.size || 0;
+        const want = total ? coverBytes(total) : 8 * 1048576;
+        // 1) descarga el porcentaje inicial del archivo (sin usar rangos)
+        const head = await headBlob(node, want);
+        const bytes = new Uint8Array(await head.arrayBuffer());
+        D("descargado " + (bytes.length / 1048576).toFixed(1) + " MB del inicio");
+        let blob = head, chapters = { has: null };
+        if (bytes.length > 8 && fourcc(bytes, 4) === 'ftyp') {
+            blob = await mp4Assemble(node, bytes, total || bytes.length, D);
+            if (blob) chapters = mp4Chapters(new Uint8Array(await blob.arrayBuffer()));
+        } else {
+            chapters = id3Chapters(bytes) || { has: null };
+        }
+        if (!blob) return { cover: null, chapters };
+        // 2) analiza lo descargado
+        let meta = {};
+        const cover = await new Promise(res => {
+            try {
+                jsmediatags.read(blob, {
+                    onSuccess: tag => {
+                        meta = (tag && tag.tags) || {}; const pic = meta.picture;
+                        if (!pic) { D("la etiqueta no tiene imagen"); return res(null); }
+                        D("ok, portada incrustada");
+                        let b = ""; const d = pic.data;
+                        for (let i = 0; i < d.length; i++) b += String.fromCharCode(d[i]);
+                        res("data:" + pic.format + ";base64," + btoa(b));
+                    },
+                    onError: err => { D("no pude leer la etiqueta: " + (err && (err.info || err.type) || "?")); res(null); }
+                });
+            } catch (e) { D("jsmediatags: " + e.message); res(null); }
+        });
+        return { cover, chapters, title: meta.title, artist: meta.artist };
+    }
+
+    // Comparación laxa de títulos para no aceptar resultados que no tienen nada que ver
+    function similarTitle(a, b) {
+        const tok = x => (x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter(w => w.length > 2);
+        const ta = tok(a), tb = tok(b);
+        if (!ta.length || !tb.length) return false;
+        return ta.filter(w => tb.includes(w)).length >= Math.ceil(ta.length / 2);
+    }
+
+    async function internetCover(it) {
+        const hasAuthor = it.author !== "Sin autor";
+        let fails = 0;
+        // 1) iTunes (audiolibros)
+        try {
+            for (const c of ["ES", "US"]) {
+                const q = "https://itunes.apple.com/search?media=audiobook&limit=5&country=" + c + "&term=" + encodeURIComponent(it.title + (hasAuthor ? " " + it.author : ""));
+                const j = await (await fetch(q)).json();
+                const r = (j.results || []).find(x => x.artworkUrl100 && similarTitle(it.title, x.collectionName || x.trackName));
+                if (r) return r.artworkUrl100.replace("100x100bb", "600x600bb");
+            }
+        } catch (e) { fails++; }
+        // 2) Google Books
+        try {
+            const q = "https://www.googleapis.com/books/v1/volumes?maxResults=5&q=" + encodeURIComponent("intitle:" + it.title + (hasAuthor ? " inauthor:" + it.author : ""));
+            const j = await (await fetch(q)).json();
+            const r = (j.items || []).find(x => x.volumeInfo && x.volumeInfo.imageLinks && similarTitle(it.title, x.volumeInfo.title));
+            if (r) return r.volumeInfo.imageLinks.thumbnail.replace("http:", "https:");
+        } catch (e) { fails++; }
+        // 3) Open Library
+        try {
+            let q = "https://openlibrary.org/search.json?limit=5&fields=cover_i,title&title=" + encodeURIComponent(it.title);
+            if (hasAuthor) q += "&author=" + encodeURIComponent(it.author);
+            const j = await (await fetch(q)).json();
+            const r = (j.docs || []).find(x => x.cover_i && similarTitle(it.title, x.title));
+            if (r) return "https://covers.openlibrary.org/b/id/" + r.cover_i + "-M.jpg";
+        } catch (e) { fails++; }
+        return fails === 3 ? undefined : null; // undefined = sin red (no cachear)
+    }
+
+    // true = descarga del audio solo lo necesario para leer la portada incrustada (false = nada del audio)
+    const USE_EMBEDDED_COVER = true;
+    // Prioridad: 1) imagen con el mismo nombre en la carpeta  2) portada incrustada (descarga parcial)
+    //            3) búsqueda en internet  4) onda aleatoria
+    function localBookCover(name) {
+        return new Promise(res => {
+            try { db.transaction(["books"], "readonly").objectStore("books").get(name).onsuccess = e => res((e.target.result && e.target.result.metaCover) || null); }
+            catch (e) { res(null); }
+        });
+    }
+
+    async function getStoreCover(it, force) {
+        // 0) si ya tienes el libro en tu biblioteca, usa su portada
+        const local = await localBookCover(it.f.name);
+        if (local) { storeDiag[it.f.name] = "portada de tu biblioteca"; return local; }
+        const key = "storeCover4:" + it.f.name;
+        if (!force) { try { const c = await dbGet("settings", key); if (c && c.value) return c.value === "none" ? null : c.value; } catch (e) {} }
+        let val = null, offline = false, transient = false;
+        if (USE_EMBEDDED_COVER) {
+            try { val = (await analyzeOnce(it, force)).cover; }
+            catch (e) { transient = true; storeDiag[it.f.name] = "error: " + (e && e.message || e); console.warn("Portada incrustada:", e); }
+        }
+        if (!val) {
+            try {
+                const img = storeCovers[it.f.name.replace(/\.[^/.]+$/, "").toLowerCase()];
+                if (img) val = await blobToDataURL(await megaBlob(img));
+            } catch (e) { console.warn("Imagen MEGA:", e); }
+        }
+        if (!val) { const r = await internetCover(it); if (r === undefined) offline = true; else val = r; }
+        if (!val && (offline || transient)) return null;
+        dbPut("settings", { key, value: val || "none" }).catch(() => {});
+        return val;
+    }
+
+    async function getStoreChapters(it, force) {
+        const key = "storeChap1:" + it.f.name;
+        if (!force) { try { const c = await dbGet("settings", key); if (c && c.value) return c.value; } catch (e) {} }
+        try {
+            const a = await analyzeOnce(it, false);
+            if (a.chapters) { dbPut("settings", { key, value: a.chapters }).catch(() => {}); return a.chapters; }
+        } catch (e) { console.warn("Capítulos:", e); }
+        return null;
+    }
+    function chapterText(c) {
+        if (!c || c.has === null) return "";
+        if (!c.has) return "sin capítulos";
+        return c.n ? c.n + " capítulos" : "con capítulos";
+    }
+
+    let coverActive = 0; const coverWait = [];
+    async function withSlot(fn) {
+        if (coverActive >= 2) await new Promise(r => coverWait.push(r));
+        coverActive++;
+        try { return await fn(); } finally { coverActive--; const n = coverWait.shift(); if (n) n(); }
+    }
+
+    function openDetail(it) {
+        const sh = document.getElementById('st-sheet'); sh.style.display = 'flex';
+        sh.querySelector('.st-cover').style.backgroundImage = coverUrl(it);
+        sh.querySelector('.st-dt').textContent = it.title;
+        sh.querySelector('.st-da').textContent = it.author;
+        const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
+        sh.querySelector('.st-di').textContent = [mb, chapterText(it.chapters)].filter(Boolean).join(' · ');
+        const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(it.f.name);
+        b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
+        storeSheetIt = it;
+        const infoEl = sh.querySelector('.st-di');
+        const resetBtn = () => { b.style.background = ''; b.style.color = ''; };
+        const setBtn = (t, pct, retry) => {
+            it._dl = retry || t.startsWith('EN TU BIBLIOTECA') ? null : { t, pct };
+            if (storeSheetIt !== it) return;
+            b.textContent = t;
+            if (pct == null) resetBtn(); else { b.style.background = 'linear-gradient(90deg,var(--color-principal) ' + pct + '%,#2a2a2a ' + pct + '%)'; b.style.color = '#fff'; }
+            b.disabled = !retry;
+            if (t.startsWith('EN TU BIBLIOTECA')) { resetBtn(); b.disabled = true; }
+        };
+        const setInfo = m => { if (storeSheetIt === it) infoEl.textContent = m; };
+        resetBtn();
+        if (it._dl && !has) { b.disabled = true; b.textContent = it._dl.t; if (it._dl.pct != null) { b.style.background = 'linear-gradient(90deg,var(--color-principal) ' + it._dl.pct + '%,#2a2a2a ' + it._dl.pct + '%)'; b.style.color = '#fff'; } }
+        b.onclick = () => { b.disabled = true; storeGet(it, setBtn, setInfo); };
+        // edición manual de metadatos (se guarda en este navegador, por nombre de archivo)
+        const box = document.getElementById('st-edit'), et = document.getElementById('st-et'), ea = document.getElementById('st-ea');
+        box.style.display = 'none'; et.value = it.title; ea.value = it.author === 'Sin autor' ? '' : it.author;
+        document.getElementById('st-ed').onclick = () => { box.style.display = box.style.display === 'none' ? 'flex' : 'none'; };
+        document.getElementById('st-esw').onclick = () => { const x = et.value; et.value = ea.value; ea.value = x; };
+        document.getElementById('st-esv').onclick = async () => {
+            const t = et.value.trim(), a = ea.value.trim();
+            if (!t) return;
+            storeMeta[it.f.name] = { t, a: a || 'Sin autor' };
+            await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
+            it.title = t; it.author = a || 'Sin autor';
+            sh.querySelector('.st-dt').textContent = it.title; sh.querySelector('.st-da').textContent = it.author;
+            box.style.display = 'none'; renderStore();
+        };
+        document.getElementById('st-ers').onclick = async () => {
+            delete storeMeta[it.f.name];
+            await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
+            applyMeta();
+            et.value = it.title; ea.value = it.author === 'Sin autor' ? '' : it.author;
+            sh.querySelector('.st-dt').textContent = it.title; sh.querySelector('.st-da').textContent = it.author;
+            renderStore();
+        };
+    }
+
+    // Tarjeta provisional en la biblioteca mientras se descarga: portada en gris que se va coloreando de abajo arriba
+    const storeDl = new Map();
+    function dlBuild(d) {
+        const c = document.createElement('div'); c.className = 'book-card dl-card'; c.dataset.dl = d.name;
+        c.innerHTML = '<div class="book-thumb" style="overflow:hidden;border:1px dashed var(--color-principal)">' +
+            '<div class="dl-g" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:grayscale(1) brightness(.75)"></div>' +
+            '<div class="dl-c" style="position:absolute;inset:0;background-size:cover;background-position:center;transition:clip-path .3s linear"></div>' +
+            '<div class="dl-p" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem;color:#fff;text-shadow:0 1px 5px #000"></div></div>' +
+            '<div class="book-label"><div class="dl-t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div><div class="dl-a" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--color-principal);opacity:.8"></div></div>';
+        c.querySelector('.dl-g').style.backgroundImage = d.cu;
+        c.querySelector('.dl-c').style.backgroundImage = d.cu;
+        c.querySelector('.dl-t').textContent = d.title; c.querySelector('.dl-a').textContent = d.author;
+        d.el = c; dlPaint(d);
+        return c;
+    }
+    function dlPaint(d) {
+        if (!d.el) return;
+        d.el.querySelector('.dl-c').style.clipPath = 'inset(' + (100 - d.pct) + '% 0 0 0)';
+        d.el.querySelector('.dl-p').textContent = d.pct + '%';
+    }
+    function dlAdd(it) {
+        const list = document.getElementById('library-list'); if (!list) return;
+        const d = { name: it.f.name, title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), pct: 0, el: null };
+        storeDl.set(d.name, d);
+        list.querySelectorAll('[data-dl]').forEach(x => { if (x.dataset.dl === d.name) x.remove(); });
+        const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
+        list.appendChild(dlBuild(d));
+    }
+    function dlSet(name, pct) { const d = storeDl.get(name); if (!d) return; d.pct = pct; dlPaint(d); }
+    function dlRemove(name) { const d = storeDl.get(name); if (d && d.el) d.el.remove(); storeDl.delete(name); }
+    function storeDlRestore() {
+        const list = document.getElementById('library-list'); if (!list || !storeDl.size) return;
+        const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
+        storeDl.forEach(d => list.appendChild(dlBuild(d)));
+    }
+
+    function storeGet(it, ui, info) {
+        const f = it.f, chunks = [], total = f.size || 0;
+        let loaded = 0, bytes = 0, last = Date.now(), finished = false;
+        const mb = n => (n / 1048576).toFixed(n >= 1e8 ? 0 : 1);
+        const show = () => {
+            const n = Math.max(loaded, bytes);
+            if (total) { const pct = Math.min(100, Math.round(n / total * 100)); ui(pct + '% · ' + mb(n) + ' / ' + mb(total) + ' MB', pct); dlSet(f.name, pct); }
+            else ui(mb(n) + ' MB descargados', 0);
+        };
+        const fail = m => { finished = true; clearInterval(wd); dlRemove(f.name); info(''); ui('Error: ' + m + ' · TOCA PARA REINTENTAR', null, true); };
+        ui('Conectando con MEGA…', 0); info(''); dlAdd(it);
+        const wd = setInterval(() => {
+            if (finished) return;
+            const sec = Math.round((Date.now() - last) / 1000);
+            if (sec >= 15) info('MEGA no responde desde hace ' + sec + ' s (¿límite de transferencia o mala conexión?). Sigue intentando…');
+        }, 3000);
+        let stream;
+        try { stream = f.download({ maxConnections: 4 }); } catch (e) { return fail(e.message || e); }
+        stream.on('progress', p => { loaded = Math.max(loaded, p.bytesLoaded || 0); last = Date.now(); info(''); show(); });
+        stream.on('data', c => { chunks.push(c); bytes += c.length; last = Date.now(); show(); });
+        stream.on('error', e => fail((e && e.message) || e));
+        stream.on('end', async () => {
+            finished = true; clearInterval(wd); info('');
+            ui('Guardando en tu biblioteca…', 100);
+            try {
+                const ext = f.name.split('.').pop().toLowerCase();
+                const file = new File(chunks, f.name, { type: MIME[ext] || 'audio/mpeg' });
+                let cv = it.cover;
+                if (cv && !cv.startsWith("data:")) { try { cv = await blobToDataURL(await (await fetch(cv)).blob()); } catch (e) {} }
+                file._storeCover = cv;
+                dlRemove(f.name);
+                file._storeTitle = it.title; file._storeAuthor = it.author === 'Sin autor' ? '' : it.author;
+                saveToLibrary(file);
+                ui("EN TU BIBLIOTECA ✓", 100);
+                setTimeout(renderStore, 1200);
+            } catch (e) { fail((e && e.message) || e); }
+        });
+    }
+
+    // Genera catalog.json (portadas pequeñas + metadatos). Se hace una sola vez; luego se sube a la carpeta de MEGA.
+    function shrinkCover(url, max) {
+        return new Promise(res => {
+            const im = new Image();
+            im.onload = () => {
+                const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas');
+                c.width = im.width * k; c.height = im.height * k;
+                c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+                res(c.toDataURL('image/jpeg', 0.8));
+            };
+            im.onerror = () => res(null); im.src = url;
+        });
+    }
+    async function buildCatalog() {
+        const st = document.getElementById('store-status'), out = {};
+        for (let i = 0; i < storeItems.length; i++) {
+            const it = storeItems[i];
+            st.textContent = "Catálogo " + (i + 1) + "/" + storeItems.length + ": " + it.title;
+            try {
+                const a = await analyzeOnce(it, true);
+                out[it.f.name] = { t: a.title || it.title, a: a.artist || it.author, cv: a.cover ? await shrinkCover(a.cover, 320) : null, ch: a.chapters };
+            } catch (e) { out[it.f.name] = { t: it.title, a: it.author, cv: null, ch: null }; }
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
+        a.download = 'catalog.json'; a.click();
+        st.textContent = "catalog.json generado: súbelo a la carpeta de MEGA y pulsa refrescar.";
+    }
 </script>
 
 </body>
