@@ -1218,9 +1218,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // Configuración PWA Autocontenida
     if ('serviceWorker' in navigator) {
         const swCode = `
-            const CACHE = 'audiobook-cache-v1';
-            self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.add('index.html'))));
-            self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+            const CACHE = 'audiobook-cache-v2';
+            self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.add('index.html')).catch(() => {})); });
+            self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+            self.addEventListener('fetch', e => e.respondWith(fetch(e.request).then(r => { if (r && r.ok && e.request.method === 'GET') { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)).catch(() => {}); } return r; }).catch(() => caches.match(e.request))));
         `;
         const blob = new Blob([swCode], { type: 'text/javascript' });
         const swUrl = URL.createObjectURL(blob);
@@ -2857,7 +2858,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const nameCount = {}; files.forEach(f => { nameCount[f.name] = (nameCount[f.name] || 0) + 1; });
         const items = files.map(f => {
             // el catálogo se busca por nombre+tamaño; por solo nombre únicamente si no hay otro archivo con ese nombre
-            const m = parseStoreName(f.name), c = catalog[f.name + '|' + (f.size || 0)] || (nameCount[f.name] === 1 ? catalog[f.name] : null) || {};
+            const m = parseStoreName(f.name), c0 = catalog[f.name + '|' + (f.size || 0)] || (nameCount[f.name] === 1 ? catalog[f.name] : null) || {};
+            // las portadas de un catálogo solo se aceptan si es de la versión nueva (hecho únicamente con portadas incrustadas)
+            const c = (catalog.__v === 2 && catalog[f.name + '|' + (f.size || 0)]) ? c0 : { ...c0, cv: null };
             let t0 = c.t || m.title, ser = m.ser, idx = m.idx; const saga = m.saga; let note = m.note;
             const pn = parseNum(t0); if (pn) { t0 = pn.rest; if (ser == null) { ser = pn.ser; idx = pn.idx; } }
             if (saga && t0.toLowerCase().startsWith(saga.toLowerCase() + ' - ')) t0 = t0.slice(saga.length + 3).trim();
@@ -3445,38 +3448,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         return ta.filter(w => tb.includes(w)).length >= Math.ceil(ta.length / 2);
     }
 
-    async function internetCover(it) {
-        const tt = (it.title || '').replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ').trim() || it.title;
-        const hasAuthor = it.author !== "Sin autor";
-        let fails = 0;
-        // 1) iTunes (audiolibros)
-        try {
-            for (const c of ["ES", "US"]) {
-                const q = "https://itunes.apple.com/search?media=audiobook&limit=5&country=" + c + "&term=" + encodeURIComponent(tt + (hasAuthor ? " " + it.author : ""));
-                const j = await (await fetch(q)).json();
-                const r = (j.results || []).find(x => x.artworkUrl100 && similarTitle(tt, x.collectionName || x.trackName));
-                if (r) return r.artworkUrl100.replace("100x100bb", "600x600bb");
-            }
-        } catch (e) { fails++; }
-        // 2) Google Books
-        try {
-            const q = "https://www.googleapis.com/books/v1/volumes?maxResults=5&q=" + encodeURIComponent("intitle:" + tt + (hasAuthor ? " inauthor:" + it.author : ""));
-            const j = await (await fetch(q)).json();
-            const r = (j.items || []).find(x => x.volumeInfo && x.volumeInfo.imageLinks && similarTitle(tt, x.volumeInfo.title));
-            if (r) return r.volumeInfo.imageLinks.thumbnail.replace("http:", "https:");
-        } catch (e) { fails++; }
-        // 3) Open Library
-        try {
-            let q = "https://openlibrary.org/search.json?limit=5&fields=cover_i,title&title=" + encodeURIComponent(tt);
-            if (hasAuthor) q += "&author=" + encodeURIComponent(it.author);
-            const j = await (await fetch(q)).json();
-            const r = (j.docs || []).find(x => x.cover_i && similarTitle(tt, x.title));
-            if (r) return "https://covers.openlibrary.org/b/id/" + r.cover_i + "-M.jpg";
-        } catch (e) { fails++; }
-        return fails === 3 ? undefined : null; // undefined = sin red (no cachear)
-    }
-
-    // true = descarga del audio solo lo necesario para leer la portada incrustada (false = nada del audio)
     const USE_EMBEDDED_COVER = true;
     // Prioridad: 1) imagen con el mismo nombre en la carpeta  2) portada incrustada (descarga parcial)
     //            3) búsqueda en internet  4) onda aleatoria
@@ -3488,10 +3459,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
 
     async function getStoreCover(it, force) {
-        // 0) si ya tienes ESE archivo en tu biblioteca (mismo nombre y tamaño), usa su portada
-        const lrec = await localBookRecord(it.f.name);
-        if (lrec && lrec.data && lrec.data.size === it.f.size && lrec.metaCover) { storeDiag[it.f.name] = "portada de tu biblioteca"; return lrec.metaCover; }
-        const key = "storeCover5:" + ik(it);
+        const key = "storeCover6:" + ik(it);
         if (!force) { try { const c = await dbGet("settings", key); if (c && c.value) return c.value === "none" ? null : c.value; } catch (e) {} }
         // 1) portada incrustada en el propio archivo (única fuente; no se busca nada en internet ni en carpetas)
         let val = null;
@@ -3672,7 +3640,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
     async function buildCatalog(sid) {
         const list = storeItems.filter(i => i.sid === sid);
-        const st = document.getElementById('store-status'), out = {};
+        const st = document.getElementById('store-status'), out = { __v: 2 };
         for (let i = 0; i < list.length; i++) {
             const it = list[i];
             st.textContent = "Catálogo " + (i + 1) + "/" + list.length + ": " + it.title;
