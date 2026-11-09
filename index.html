@@ -3245,7 +3245,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             const list = items.filter(i => i.author && normT(i.author) === k);
             // si ya existe una saga/versión con exactamente los mismos audiolibros, no se crea el grupo de autor (evita redundancia)
             if (list.length && nonAuthorSigs.has(grpSig(list))) return;
-            if (list.length) ranked.push({ g: { name: 'Más de ' + (list[0].author || a.label), list, kind: 'author' }, idx: 9999, r: { s: a.live ? 2 : 1, ts: a.ts || 0 } });
+            if (list.length < 2) return;   // un solo libro del autor en la tienda: no tiene sentido una fila "En escucha"
+            ranked.push({ g: { name: 'Más de ' + (list[0].author || a.label), list, kind: 'author' }, idx: 9999, r: { s: a.live ? 2 : 1, ts: a.ts || 0 } });
         });
         const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx) || ((x.sub || 0) - (y.sub || 0)));
         const rest = ranked.filter(x => !x.r);
