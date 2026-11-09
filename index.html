@@ -774,6 +774,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
 #store-section{display:none;padding-bottom:0;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
+.st-row h4{display:flex;align-items:center}
+.st-live{margin-left:auto;padding-left:8px;font-size:20px;color:var(--color-principal)}
 .st-tag{margin-right:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
 .st-scroll{display:flex;gap:14px;overflow-x:auto;padding:5px 0;scrollbar-width:none}
 .st-scroll .book-card{flex:none}
@@ -3211,9 +3213,11 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             r.firstChild.textContent = title;
             // etiquetas (Saga, Editorial, En escucha…) delante del título del grupo
             const h = r.firstChild; h.textContent = '';
-            [].concat(tags || []).filter(Boolean).forEach(tg => { const t = document.createElement('span'); t.className = 'st-tag'; t.textContent = tg; h.appendChild(t); });
+            [].concat(tags || []).filter(tg => tg && tg !== 'En escucha').forEach(tg => { const t = document.createElement('span'); t.className = 'st-tag'; t.textContent = tg; h.appendChild(t); });
             if (color) { const ts = document.createElement('span'); ts.textContent = title; ts.style.color = color; h.appendChild(ts); }
             else h.appendChild(document.createTextNode(title));
+            // "En escucha": icono al otro lado del encabezado
+            if ([].concat(tags || []).includes('En escucha')) { const ic = document.createElement('i'); ic.className = 'material-icons st-live'; ic.textContent = 'headphones'; ic.title = 'En escucha'; ic.setAttribute('aria-label', 'En escucha'); h.appendChild(ic); }
             list.forEach((it, i) => { const c = mkCard(it, obs); c.style.setProperty('--cd', Math.min(i, 8) * 0.05 + 's'); r.lastChild.appendChild(c); });
             body.appendChild(r);
         };
