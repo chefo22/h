@@ -707,10 +707,12 @@
             <i class="material-icons st-ic" onclick="toggleStoreConfig()">link</i>
         </div>
         <div id="st-cfg">
+            <div id="store-list" style="width:100%"></div>
+            <input id="store-name" placeholder="Nombre (opcional)">
             <input id="store-url" type="password" autocomplete="off" placeholder="Enlace de la tienda">
-            <button class="st-btn" onclick="loadStore(true)">Guardar</button>
-            <button class="st-btn" style="background:#2a2a2a" onclick="buildCatalog()">Generar catálogo</button>
+            <button class="st-btn" onclick="addStore()">Añadir</button>
         </div>
+        <div id="st-chips"></div>
         <input id="st-q" placeholder="Buscar en la tienda" oninput="renderStore()">
         <div id="store-status"></div>
         <div id="library-list">
@@ -730,7 +732,7 @@
 .player-container:not(.player-active) #library-container{max-height:82dvh;overflow-y:auto;scrollbar-width:none}
 .player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
 .player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
-.player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status{display:none!important}
+.player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status,.player-active #st-chips{display:none!important}
 .st-top{display:flex;justify-content:center;gap:22px;padding:0 0 6px}
 .st-ic{color:#bbb;font-size:22px;cursor:pointer}
 #st-cfg{display:none;gap:8px;padding:4px 4px 8px;flex-wrap:wrap}
@@ -740,6 +742,14 @@
 .st-btn{background:var(--color-principal);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:.85rem}
 .st-btn:disabled{background:#2a2a2a;color:#888}
 #store-status{color:#888;font-size:.72rem;padding:0 0 6px}
+#store-name{flex:1 1 100%!important}
+.st-srow{display:flex;align-items:center;gap:10px;padding:4px 0}
+.st-srow span{flex:1;min-width:0;text-align:left;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-srow .st-btn{padding:6px 12px;background:#2a2a2a}
+#st-chips{display:flex;gap:8px;overflow-x:auto;padding:0 0 8px;scrollbar-width:none}
+#st-chips::-webkit-scrollbar{display:none}
+.st-chip{flex:none;background:#1c1c1c;color:#bbb;border:1px solid #333;border-radius:16px;padding:6px 14px;font-size:.75rem;font-weight:600}
+.st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
 #store-section{display:none;padding-bottom:90px;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
 .st-scroll{display:flex;gap:10px;overflow-x:auto;padding:0 0 4px;scrollbar-width:none}
@@ -2481,71 +2491,125 @@
     const DEFAULT_STORE_URL = "";
     const AUDIO_EXT = /\.(mp3|m4a|m4b|mp4|ogg|opus|wav|flac|aac)$/i;
     const MIME = { mp3:'audio/mpeg', m4a:'audio/mp4', m4b:'audio/mp4', mp4:'audio/mp4', ogg:'audio/ogg', opus:'audio/ogg', wav:'audio/wav', flac:'audio/flac', aac:'audio/aac' };
-    let storeFiles = [];
 
     function toggleStoreConfig() { const c = document.getElementById('st-cfg'); c.style.display = c.style.display === 'flex' ? 'none' : 'flex'; }
     function toggleStoreSearch() { const q = document.getElementById('st-q'); q.style.display = q.style.display === 'block' ? 'none' : 'block'; if (q.style.display === 'block') q.focus(); else { q.value = ""; renderStore(); } }
     function importFromDevice() { document.getElementById('file-input').click(); }
     async function initStore() {
         try {
-            const e = await dbGet("settings", "storeUrl");
-            const u = (e && e.value) || DEFAULT_STORE_URL;
-            document.getElementById('store-url').value = u || "";
-            if (u) loadStore();
-            else document.getElementById('store-status').textContent = "Toca el icono de enlace para conectar tu tienda.";
+            const e = await dbGet("settings", "storeList");
+            if (e && Array.isArray(e.value)) storeList = e.value;
+            else {
+                // migración: antes solo había una tienda (storeUrl)
+                const o = await dbGet("settings", "storeUrl");
+                const u = (o && o.value) || DEFAULT_STORE_URL;
+                if (u) { storeList = [{ id: 's0', name: 'Tienda 1', url: u }]; await saveStoreList(); }
+            }
+            renderStoreList(); renderChips();
+            if (storeList.length) loadStore();
+            else document.getElementById('store-status').textContent = "Toca el icono de enlace para añadir tu tienda.";
         } catch (err) {}
     }
     const _storeWait = setInterval(() => { if (typeof db !== 'undefined' && db) { clearInterval(_storeWait); initStore(); } }, 300);
 
 
     const IMG_EXT = /\.(jpe?g|png|webp)$/i;
-    let storeCovers = {}, storeCatalogNode = null, storeCatalog = {}, storeItems = [];
-    function storeCollect(node, out, imgs) {
+    let storeItems = [];
+    function storeCollect(node, out, imgs, ctx) {
         (node.children || []).forEach(c => {
             const n = c.name || "";
-            if (c.directory) storeCollect(c, out, imgs);
+            if (c.directory) storeCollect(c, out, imgs, ctx);
             else if (AUDIO_EXT.test(n)) out.push(c);
-            else if (/^catalog\.json$/i.test(n)) storeCatalogNode = c;
+            else if (/^catalog\.json$/i.test(n)) ctx.cat = c;
             else if (IMG_EXT.test(n)) imgs[n.replace(/\.[^/.]+$/, "").toLowerCase()] = c;
         });
         return out;
     }
 
-    async function loadStore(save) {
-        const url = document.getElementById('store-url').value.trim();
-        const status = document.getElementById('store-status');
-        if (!url) { status.textContent = "Configura el enlace de la tienda."; document.getElementById('st-cfg').style.display = 'flex'; return; }
-        if (!window.mega) { status.textContent = "No se pudo cargar megajs (revisa tu conexión)."; return; }
-        status.textContent = "Cargando tienda...";
-        try {
-            if (save) { await dbPut("settings", { key: "storeUrl", value: url }); document.getElementById('st-cfg').style.display = 'none'; }
-            const folder = mega.File.fromURL(url);
-            await folder.loadAttributes();
-            const imgs = {}; storeCatalogNode = null;
-            const files = storeCollect(folder, [], imgs);
-            storeCovers = imgs; storeFiles = files; storeCatalog = {};
-            // catálogo: un único archivo pequeño con portadas y metadatos, guardado en caché
-            if (storeCatalogNode) {
-                const stamp = storeCatalogNode.size + ":" + (storeCatalogNode.timestamp || 0);
-                let c = null; try { c = await dbGet("settings", "storeCatalog"); } catch (e) {}
-                if (c && c.value && c.value.stamp === stamp) storeCatalog = c.value.data;
-                else {
-                    storeCatalog = JSON.parse(await (await megaBlob(storeCatalogNode)).text());
-                    dbPut("settings", { key: "storeCatalog", value: { stamp, data: storeCatalog } }).catch(() => {});
-                }
+    // ── Varias tiendas a la vez ───────────────────────────────────────
+    let storeList = [], storeFilter = 'all';
+    const saveStoreList = () => dbPut("settings", { key: "storeList", value: storeList }).catch(() => {});
+    function renderStoreList() {
+        const el = document.getElementById('store-list'); if (!el) return;
+        el.innerHTML = '';
+        storeList.forEach(s => {
+            const r = document.createElement('div'); r.className = 'st-srow';
+            const n = document.createElement('span'); n.textContent = s.name;
+            const c = document.createElement('button'); c.className = 'st-btn'; c.textContent = 'Catálogo'; c.onclick = () => buildCatalog(s.id);
+            const d = document.createElement('i'); d.className = 'material-icons st-ic'; d.textContent = 'delete'; d.onclick = () => removeStore(s.id);
+            r.append(n, c, d); el.appendChild(r);
+        });
+    }
+    function renderChips() {
+        const el = document.getElementById('st-chips'); if (!el) return;
+        el.innerHTML = '';
+        if (storeList.length < 2) { storeFilter = 'all'; return; }
+        [{ id: 'all', name: 'Todas' }, ...storeList].forEach(s => {
+            const b = document.createElement('button'); b.className = 'st-chip' + (storeFilter === s.id ? ' on' : ''); b.textContent = s.name;
+            b.onclick = () => { storeFilter = s.id; renderChips(); renderStore(); };
+            el.appendChild(b);
+        });
+    }
+    async function addStore() {
+        const ue = document.getElementById('store-url'), ne = document.getElementById('store-name');
+        const url = ue.value.trim(); if (!url) return;
+        if (!storeList.some(s => s.url === url)) storeList.push({ id: 's' + Date.now().toString(36), name: ne.value.trim() || 'Tienda ' + (storeList.length + 1), url });
+        ue.value = ''; ne.value = '';
+        await saveStoreList(); renderStoreList(); renderChips(); loadStore();
+    }
+    async function removeStore(id) {
+        const s = storeList.find(x => x.id === id);
+        if (!s || !confirm('¿Quitar "' + s.name + '" de tus tiendas?')) return;
+        storeList = storeList.filter(x => x.id !== id);
+        if (storeFilter === id) storeFilter = 'all';
+        await saveStoreList(); renderStoreList(); renderChips(); loadStore();
+    }
+
+    async function loadOneStore(s) {
+        const folder = mega.File.fromURL(s.url);
+        await folder.loadAttributes();
+        const imgs = {}, ctx = { cat: null };
+        const files = storeCollect(folder, [], imgs, ctx);
+        let catalog = {};
+        // catálogo: un único archivo pequeño con portadas y metadatos, guardado en caché (uno por tienda)
+        if (ctx.cat) {
+            const stamp = ctx.cat.size + ":" + (ctx.cat.timestamp || 0), key = "storeCatalog:" + s.id;
+            let c = null; try { c = await dbGet("settings", key); } catch (e) {}
+            if (c && c.value && c.value.stamp === stamp) catalog = c.value.data;
+            else {
+                catalog = JSON.parse(await (await megaBlob(ctx.cat)).text());
+                dbPut("settings", { key, value: { stamp, data: catalog } }).catch(() => {});
             }
-            try { const e = await dbGet("settings", "storeMeta"); storeMeta = (e && e.value) || {}; } catch (e) { storeMeta = {}; }
-            storeItems = files.map(f => {
-                const m = parseStoreName(f.name), c = storeCatalog[f.name] || {};
-                return { f, t0: c.t || m.title, a0: c.a || m.author, title: '', author: '', cover: c.cv || null, chapters: c.ch || null, ts: f.timestamp || 0, tried: !!storeCatalogNode };
-            });
-            applyMeta();
-            status.textContent = storeCatalogNode ? "" : "Sin catalog.json: las portadas se buscan una a una. Genera el catálogo (icono de enlace).";
-            renderStore();
-        } catch (e) {
-            console.error(e);
-            status.textContent = "Error: " + (e.message || e);
         }
+        const items = files.map(f => {
+            const m = parseStoreName(f.name), c = catalog[f.name] || {};
+            return { f, sid: s.id, covers: imgs, t0: c.t || m.title, a0: c.a || m.author, title: '', author: '', cover: c.cv || null, chapters: c.ch || null, ts: f.timestamp || 0, tried: !!ctx.cat };
+        });
+        return { items, hasCatalog: !!ctx.cat };
+    }
+
+    async function loadStore() {
+        const status = document.getElementById('store-status');
+        if (!storeList.length) {
+            storeItems = []; renderStore();
+            status.textContent = "Añade el enlace de una tienda."; document.getElementById('st-cfg').style.display = 'flex';
+            return;
+        }
+        if (!window.mega) { status.textContent = "No se pudo cargar megajs (revisa tu conexión)."; return; }
+        status.textContent = "Cargando " + (storeList.length > 1 ? storeList.length + " tiendas" : "tienda") + "...";
+        try { const e = await dbGet("settings", "storeMeta"); storeMeta = (e && e.value) || {}; } catch (e) { storeMeta = {}; }
+        const res = await Promise.allSettled(storeList.map(loadOneStore));
+        const all = [], errs = []; let noCat = 0;
+        res.forEach((r, i) => {
+            if (r.status === 'fulfilled') { all.push(...r.value.items); if (!r.value.hasCatalog) noCat++; }
+            else { console.error(r.reason); errs.push(storeList[i].name + ": " + ((r.reason && r.reason.message) || r.reason)); }
+        });
+        storeItems = all;
+        applyMeta();
+        let msg = errs.join(" · ");
+        if (noCat && !errs.length) msg = noCat === storeList.length ? "Sin catalog.json: las portadas se buscan una a una. Genera el catálogo (icono de enlace)." : noCat + " tienda(s) sin catalog.json (icono de enlace para generarlo).";
+        status.textContent = msg;
+        renderChips(); renderStore();
     }
 
     function storeOwned() {
@@ -2671,10 +2735,11 @@
             body.appendChild(r);
         };
         const byTitle = (x, y) => cmpEs(x.title, y.title);
-        if (q) { row('Resultados', storeItems.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
+        const items = storeFilter === 'all' ? storeItems : storeItems.filter(i => i.sid === storeFilter);
+        if (q) { row('Resultados', items.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
         const used = new Set();
-        storeGroups(storeItems).forEach(g => { g.list.forEach(i => used.add(i.f.name)); row(g.name, g.list.sort(byTitle)); });
-        row('Más audiolibros', storeItems.filter(i => !used.has(i.f.name)).sort(byTitle));
+        storeGroups(items).forEach(g => { g.list.forEach(i => used.add(i.f.name)); row(g.name, g.list.sort(byTitle)); });
+        row('Más audiolibros', items.filter(i => !used.has(i.f.name)).sort(byTitle));
     }
 
     function megaBlob(node) {
@@ -2925,7 +2990,7 @@
         }
         if (!val) {
             try {
-                const img = storeCovers[it.f.name.replace(/\.[^/.]+$/, "").toLowerCase()];
+                const img = (it.covers || {})[it.f.name.replace(/\.[^/.]+$/, "").toLowerCase()];
                 if (img) val = await blobToDataURL(await megaBlob(img));
             } catch (e) { console.warn("Imagen MEGA:", e); }
         }
@@ -2963,7 +3028,8 @@
         sh.querySelector('.st-dt').textContent = it.title;
         sh.querySelector('.st-da').textContent = it.author;
         const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
-        sh.querySelector('.st-di').textContent = [mb, chapterText(it.chapters)].filter(Boolean).join(' · ');
+        const sn = storeList.length > 1 ? ((storeList.find(x => x.id === it.sid) || {}).name || '') : '';
+        sh.querySelector('.st-di').textContent = [mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(it.f.name);
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
@@ -3093,11 +3159,12 @@
             im.onerror = () => res(null); im.src = url;
         });
     }
-    async function buildCatalog() {
+    async function buildCatalog(sid) {
+        const list = storeItems.filter(i => i.sid === sid);
         const st = document.getElementById('store-status'), out = {};
-        for (let i = 0; i < storeItems.length; i++) {
-            const it = storeItems[i];
-            st.textContent = "Catálogo " + (i + 1) + "/" + storeItems.length + ": " + it.title;
+        for (let i = 0; i < list.length; i++) {
+            const it = list[i];
+            st.textContent = "Catálogo " + (i + 1) + "/" + list.length + ": " + it.title;
             try {
                 const a = await analyzeOnce(it, true);
                 out[it.f.name] = { t: a.title || it.title, a: a.artist || it.author, cv: a.cover ? await shrinkCover(a.cover, 320) : null, ch: a.chapters };
