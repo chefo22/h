@@ -3141,6 +3141,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         // 3) mismo autor
         const aut = [];
         bucket(items, i => i.author !== 'Sin autor' && i.author.toLowerCase()).filter(l => l.length >= 2)
+            .filter(l => { const sg = sigOf(l); return ![...sagas, ...vers].some(g => sigOf(g.list) === sg); })   // autor con exactamente los mismos libros que una saga: no se agrupa
             .sort((x, y) => cmpEs(x[0].author, y[0].author)).forEach(l => addTo(aut, l[0].author, l));
         sagas.forEach(g => g.tag = 'Saga');
         vers.forEach(g => g.tag = g.list.length + ' versiones');
@@ -3237,9 +3238,13 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         };
         const ranked = groups.map((g, idx) => ({ g, idx, r: rankOf(g) }));
         // autores escuchados que no tienen grupo propio en la tienda (p. ej. un solo libro suyo)
+        const grpSig = l => l.map(ik).sort().join('|');
+        const nonAuthorSigs = new Set(groups.filter(g => g.kind !== 'author' && g.kind !== 'publisher').map(g => grpSig(g.list)));
         prof.authors.forEach((a, k) => {
             if (groups.some(g => g.kind === 'author' && normT(g.name) === k)) return;
             const list = items.filter(i => i.author && normT(i.author) === k);
+            // si ya existe una saga/versión con exactamente los mismos audiolibros, no se crea el grupo de autor (evita redundancia)
+            if (list.length && nonAuthorSigs.has(grpSig(list))) return;
             if (list.length) ranked.push({ g: { name: 'Más de ' + (list[0].author || a.label), list, kind: 'author' }, idx: 9999, r: { s: a.live ? 2 : 1, ts: a.ts || 0 } });
         });
         const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx));
