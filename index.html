@@ -728,7 +728,15 @@
 
     <audio id="audio-player"></audio>
     <style>
-.player-container:not(.player-active) #library-container{max-height:82dvh;overflow-y:auto;scrollbar-width:none}
+@property --fb{syntax:'<length>';inherits:false;initial-value:0px}
+@property --ft{syntax:'<length>';inherits:false;initial-value:0px}
+.player-container:not(.player-active) #library-container{max-height:calc(100dvh - 3rem);overflow-y:auto;scrollbar-width:none;box-sizing:border-box;padding-bottom:22px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 var(--ft),#000 calc(100% - var(--fb)),transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 var(--ft),#000 calc(100% - var(--fb)),transparent 100%);
+  transition:--fb .25s ease,--ft .25s ease}
+.player-container:not(.player-active) #library-container.fade-b{--fb:52px}
+.player-container:not(.player-active) #library-container.fade-t{--ft:26px}
+body.has-mini-player .player-container:not(.player-active) #library-container{padding-bottom:112px}
 .player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
 .player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
 .player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status,.player-active #st-chips{display:none!important}
@@ -749,8 +757,9 @@
 #st-chips::-webkit-scrollbar{display:none}
 .st-chip{flex:none;background:#1c1c1c;color:#bbb;border:1px solid #333;border-radius:16px;padding:6px 14px;font-size:.75rem;font-weight:600}
 .st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
-#store-section{display:none;padding-bottom:90px;text-align:left}
+#store-section{display:none;padding-bottom:0;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
+.st-tag{margin-left:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
 .st-scroll{display:flex;gap:14px;overflow-x:auto;padding:5px 0;scrollbar-width:none}
 .st-scroll .book-card{flex:none}
 .st-scroll::-webkit-scrollbar{display:none}
@@ -767,6 +776,37 @@
 #st-sheet{display:none;position:fixed;inset:0;z-index:2200;background:#000a;align-items:flex-end}
 .st-sheetbox{width:100%;max-width:480px;margin:0 auto;background:#161616;border-radius:24px 24px 0 0;padding:20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .st-sheetbox .st-cover{width:60%;max-width:240px}
+
+/* Biblioteca: padding para que el botón X no se corte, grupos y barra de progreso */
+#library-container #library-list{padding:12px;box-sizing:border-box}
+.lib-group-title{grid-column:1/-1;width:100%;box-sizing:border-box;text-align:left;font-size:.6rem;font-weight:900;letter-spacing:3px;color:var(--color-principal);text-transform:uppercase;display:flex;align-items:center;gap:10px;margin:2px 0 0;padding:0 2px;user-select:none}
+.lib-group-title::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.1)}
+.book-progress{width:85px;margin-top:5px;display:flex;flex-direction:column;gap:3px}
+.bp-track{height:4px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden}
+.bp-fill{height:100%;width:0;border-radius:2px;background:var(--bp-color,var(--color-principal));transition:width .4s}
+.bp-text{display:flex;justify-content:space-between;gap:4px;font-size:.5rem;font-weight:700;color:#aaa;white-space:nowrap;text-transform:none}
+.bp-text span:last-child{overflow:hidden;text-overflow:ellipsis}
+/* Reproductor activo en vertical/móvil: la lista es una fila con scroll horizontal */
+#library-list.player-active .lib-group-title{flex:none;width:auto;align-self:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:0;letter-spacing:2px}
+#library-list.player-active .lib-group-title::after{display:none}
+@media (orientation:landscape) and (min-width:660px){
+  #library-list.player-active .lib-group-title{writing-mode:horizontal-tb;transform:none;width:100%;align-self:stretch;padding:0 2px;letter-spacing:3px}
+  #library-list.player-active .lib-group-title::after{display:block}
+  .player-active .book-card{flex-wrap:wrap}
+  .player-active .book-progress{width:100%;flex:1 0 100%;margin-top:-6px}
+}
+/* Tarjetas de la tienda: sin la animación genérica (evita el segundo "parpadeo" al quitar la clase) ni transiciones de color en cascada */
+#st-body .book-card{animation:none}
+#st-body .book-card *{transition:none}
+#st-body .book-card .st-img{position:absolute;inset:0;border-radius:inherit;background-size:cover;background-position:center;opacity:0;transition:opacity .55s ease}
+#st-body .book-card .st-img.on{opacity:1}
+#st-body .book-card .st-own{z-index:2}
+/* Aparición orgánica de la tienda (solo la primera vez): filas y tarjetas en cascada */
+@keyframes stRise{from{opacity:0;transform:translateY(18px) scale(.97);filter:blur(4px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes stHead{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+#st-body.st-anim .st-row h4{animation:stHead .6s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:var(--rd,0s)}
+#st-body.st-anim .st-row .book-card{animation:stRise .7s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--rd,0s) + var(--cd,0s))}
+@media (prefers-reduced-motion:reduce){#st-body.st-anim .st-row h4,#st-body.st-anim .st-row .book-card{animation:none}}
 </style>
     <div id="st-sheet" onclick="if(event.target===this)this.style.display='none'">
         <div class="st-sheetbox">
@@ -987,7 +1027,7 @@
         
         /* Ajuste de padding de la biblioteca para que no la tape el mini reproductor */
         body.has-mini-player .player-container:not(.player-active) {
-            padding-bottom: 80px;
+            padding-bottom: 0.2rem;
         }
     </style>
 
@@ -1321,6 +1361,11 @@
         return e;
     }
 
+    // Muestreo de color en una rejilla de 50x50: se ignora la esquina inferior derecha
+    // (x >= 56 %, y >= 72 %), donde las carátulas de Audible llevan su etiqueta de color.
+    const COLOR_SKIP_X = 28, COLOR_SKIP_Y = 36;
+    // Versión del algoritmo de color: al subirla se descartan los colores cacheados con el anterior
+    const COLOR_V = 2;
     // Color dominante vibrante de una imagen ya cargada (devuelve hex)
     function dominantColorHex(img) {
         const canvas = document.createElement('canvas');
@@ -1330,6 +1375,7 @@
         const data = ctx.getImageData(0, 0, 50, 50).data;
         let counts = {}, maxCount = 0, domR = 0, domG = 0, domB = 0;
         for (let i = 0; i < data.length; i += 16) {
+            if ((i >> 2) % 50 >= COLOR_SKIP_X && ((i >> 2) / 50 | 0) >= COLOR_SKIP_Y) continue; // ignora la esquina inferior derecha (etiqueta de Audible)
             if (data[i+3] < 128) continue;
             const cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
             if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
@@ -1357,6 +1403,88 @@
         const q = fL < 0.5 ? fL*(1+fS) : fL+fS-fL*fS, pp = 2*fL-q;
         const toH = x => Math.round(f(pp, q, x)*255).toString(16).padStart(2, '0');
         return `#${toH(fH+1/3)}${toH(fH)}${toH(fH-1/3)}`;
+    }
+    // ────────────────────────────────────────────────────────────────────
+
+    // ── Progreso de escucha ──────────────────────────────────────────────
+    const progressMem = new Map();      // nombre -> segundos escuchados
+    const progressSaved = new Map();    // nombre -> marca de tiempo del último guardado
+    let currentBookFile = null;         // File del libro cargado en el reproductor
+    let probeChain = Promise.resolve(); // sondeos de duración en serie
+    const regroupDone = new Set();
+
+    function loadAllProgress() {
+        return new Promise((resolve) => {
+            if (!db) return resolve();
+            try {
+                const req = db.transaction(['progress'], 'readonly').objectStore('progress').getAll();
+                req.onsuccess = () => { (req.result || []).forEach(e => { if (e && e.name != null && (e.saved || 0) >= (progressSaved.get(e.name) || 0)) { progressMem.set(e.name, e.time); progressSaved.set(e.name, e.saved || 0); } }); resolve(); };
+                req.onerror = () => resolve();
+            } catch (e) { resolve(); }
+        });
+    }
+    function getProgressTime(name) {
+        if (progressMem.has(name)) return progressMem.get(name) || 0;
+        const ls = parseFloat(localStorage.getItem('audiobook_progress_' + name));
+        return isFinite(ls) ? ls : 0;
+    }
+    function isFinished(time, dur) { return !!(dur && isFinite(dur) && dur - time < 5); }
+    function fmtRemaining(secs) {
+        secs = Math.max(0, Math.round(secs));
+        const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+        if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+        if (m > 0) return `${m}m`;
+        return secs > 0 ? '<1m' : '0m';
+    }
+    // Pinta barra, porcentaje y tiempo restante en una tarjeta
+    function setCardProgress(card, time, dur) {
+        const box = card && card.querySelector('.book-progress');
+        if (!box) return;
+        const fill = box.querySelector('.bp-fill');
+        const pct = box.querySelector('.bp-pct');
+        const left = box.querySelector('.bp-left');
+        if (dur && isFinite(dur) && dur > 0) {
+            const p = Math.min(100, Math.max(0, time / dur * 100));
+            fill.style.width = p + '%';
+            pct.textContent = Math.floor(p) + '%';
+            left.textContent = 'quedan ' + fmtRemaining(dur - time);
+            box.title = `${Math.floor(p)}% escuchado · quedan ${fmtRemaining(dur - time)}`;
+        } else {
+            fill.style.width = '0%';
+            pct.textContent = '…';
+            left.textContent = '';
+        }
+    }
+    // Obtiene la duración de un archivo sin reproducirlo (solo metadatos) y la cachea
+    function probeDuration(file) {
+        probeChain = probeChain.then(() => new Promise((resolve) => {
+            const a = new Audio();
+            a.preload = 'metadata';
+            const url = URL.createObjectURL(file);
+            const done = (d) => { a.onloadedmetadata = a.onerror = null; a.removeAttribute('src'); try { a.load(); } catch (e) {} URL.revokeObjectURL(url); resolve(d); };
+            a.onloadedmetadata = () => done(isFinite(a.duration) ? a.duration : null);
+            a.onerror = () => done(null);
+            setTimeout(() => done(null), 15000);
+            a.src = url;
+        }));
+        return probeChain;
+    }
+    // Actualiza en vivo la tarjeta del libro que se está escuchando
+    let lastCardUpdate = 0;
+    function updateCardProgressLive(name, time, dur) {
+        const now = Date.now();
+        if (now - lastCardUpdate < 1000) return;
+        lastCardUpdate = now;
+        const list = document.getElementById('library-list');
+        if (!list) return;
+        const card = Array.from(list.querySelectorAll('.item-reorderable')).find(c => c.dataset.id === name);
+        if (!card) return;
+        if (card.querySelector('.book-progress')) { setCardProgress(card, time, dur); return; }
+        // Empezó a escucharse: pasa al grupo "En escucha" (una sola vez por sesión)
+        if (time > 0 && dur && !isFinished(time, dur) && !regroupDone.has(name)) {
+            regroupDone.add(name);
+            displayLibrary();
+        }
     }
     // ────────────────────────────────────────────────────────────────────
 
@@ -1522,7 +1650,7 @@
         getBookMeta(file)
             .then(m => doSave({ title: m.title, artist: m.artist, cover: m.cover }))
             .catch(() => doSave({}));
-    }    function displayLibrary() { loadAllMeta().then(renderLibrary); }
+    }    function displayLibrary() { Promise.all([loadAllMeta(), loadAllProgress()]).then(renderLibrary); }
     function renderLibrary() {
         const list = document.getElementById('library-list');
         if (!list) return;
@@ -1543,8 +1671,24 @@
                     books.sort((a, b) => (savedOrder.indexOf(a.name) === -1 ? 999 : savedOrder.indexOf(a.name)) - (savedOrder.indexOf(b.name) === -1 ? 999 : savedOrder.indexOf(b.name)));
                 }
                 
-                books.forEach(bookData => {
+                // Grupos: "En escucha" (empezados y sin terminar) y el resto
+                const durOf = (b) => { const mm = b.data ? metaMem.get(metaKey(b.data)) : null; return mm ? mm.duration : null; };
+                const isListening = (b) => { const t = getProgressTime(b.name); return t > 0 && !isFinished(t, durOf(b)); };
+                const listening = books.filter(isListening);
+                const others = books.filter(b => !isListening(b));
+                const ordered = listening.concat(others);
+                let lastGroup = null;
+                ordered.forEach(bookData => {
                     const bookName = bookData.name;
+                    const inListening = listening.indexOf(bookData) !== -1;
+                    const groupId = inListening ? 'listening' : 'rest';
+                    if (listening.length > 0 && groupId !== lastGroup) {
+                        const gt = document.createElement('div');
+                        gt.className = 'lib-group-title';
+                        gt.textContent = inListening ? 'En escucha' : 'Resto de la biblioteca';
+                        list.appendChild(gt);
+                    }
+                    lastGroup = groupId;
                     // Metadata desde la caché (nombre+tamaño); migra libros antiguos sin releer el archivo
                     let m = null;
                     if (bookData.data) {
@@ -1562,8 +1706,9 @@
                     const card = document.createElement('div');                    card.className = 'book-card item-reorderable';
                     card.draggable = true;
                     card.dataset.id = bookName;
+                    card.dataset.group = groupId;
                     
-                    const progress = localStorage.getItem('audiobook_progress_' + bookName);
+                    const progTime = getProgressTime(bookName);
                     const cleanName = bookName.replace(/\.[^/.]+$/, "").toUpperCase();
                     let tPart = cleanName, aPart = "";
                     if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
@@ -1572,13 +1717,25 @@
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
                                        `<div class="marquee-container ${checkScroll(aPart)}" style="color:var(--color-principal); opacity:0.8;"><span class="marquee-text">${aContent}</span></div>`;                    card.innerHTML = `
                         <div class="book-thumb" style="position:relative">
-                            ${(progress && parseFloat(progress) > 0) ? '<div class="status-dot"></div>' : ''}
+                            ${progTime > 0 ? '<div class="status-dot"></div>' : ''}
                             <i class="material-icons" style="font-size: 2.5rem; opacity: 0.15;">headset</i>
                             <button class="delete-btn-mini" onclick="event.stopPropagation(); deleteFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">close</i></button>
                             <button class="download-btn-mini" onclick="event.stopPropagation(); downloadFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">download</i></button>
                         </div>
                         <div class="book-label">${formattedLabel}</div>
-                    `;                    const thumb = card.querySelector('.book-thumb');
+                        ${inListening ? '<div class="book-progress"><div class="bp-track"><div class="bp-fill"></div></div><div class="bp-text"><span class="bp-pct"></span><span class="bp-left"></span></div></div>' : ''}
+                    `;
+                    if (inListening) {
+                        const knownDur = m ? m.duration : null;
+                        setCardProgress(card, progTime, knownDur);
+                        if (!knownDur && bookData.data) {
+                            probeDuration(bookData.data).then(d => {
+                                if (!d) return;
+                                updateBookMeta(bookData.data, { duration: d });
+                                setCardProgress(card, getProgressTime(bookName), d);
+                            });
+                        }
+                    }                    const thumb = card.querySelector('.book-thumb');
                     
                     // Configuración de eventos de la tarjeta
                     const startPress = () => {
@@ -1612,7 +1769,7 @@
 
                     card.addEventListener('dragover', (e) => {
                         e.preventDefault();
-                        if (!draggedItem || draggedItem === card) return;
+                        if (!draggedItem || draggedItem === card || draggedItem.dataset.group !== card.dataset.group) return;
                         
                         const children = Array.from(list.children);
                         const currIdx = children.indexOf(draggedItem);
@@ -1658,12 +1815,13 @@
                         if (icon) icon.style.display = 'none';                        // Color dominante: de la caché si existe; si no, se calcula una vez y se guarda
                         const applyCardColor = (color) => {
                             bookColorCache[bookName] = color;
+                            card.style.setProperty('--bp-color', color);
                             const dot = card.querySelector('.status-dot');
                             if (dot) dot.style.backgroundColor = color;
                             const secondLine = card.querySelector('.book-label div:nth-child(2)');
                             if (secondLine) secondLine.style.color = color;
                         };
-                        if (m && m.color) {
+                        if (m && m.color && m.colorV === COLOR_V) {
                             applyCardColor(m.color);
                         } else {
                             const imgDot = new Image();
@@ -1672,7 +1830,7 @@
                                 try {
                                     const hex = dominantColorHex(imgDot);
                                     applyCardColor(hex);
-                                    if (m) updateBookMeta(bookData.data, { color: hex });
+                                    if (m) updateBookMeta(bookData.data, { color: hex, colorV: COLOR_V });
                                 } catch (err) { console.error(err); }
                             };
                         }
@@ -1765,7 +1923,7 @@
         if (artist) authorEl.textContent = artist;
         if (meta.cover) {
             artworkUrl = meta.cover;
-            if (meta.color) bookColorCache[file.name] = meta.color;
+            if (meta.color && meta.colorV === COLOR_V) bookColorCache[file.name] = meta.color;
             img.onload = function() {
                 img.style.filter = 'blur(0px)';
                 img.style.transform = 'scale(1) translateY(0)';
@@ -1777,7 +1935,7 @@
                     const hex = dominantColorHex(img);
                     setThemeColor(hex, false);
                     bookColorCache[file.name] = hex;
-                    updateBookMeta(file, { color: hex });
+                    updateBookMeta(file, { color: hex, colorV: COLOR_V });
                 } catch (e) { console.error("Error en Chameleon Unificado:", e); }
             };
             img.src = artworkUrl;
@@ -1819,6 +1977,7 @@
             document.querySelector('.player-container').classList.add('player-active');
             document.getElementById('library-list').classList.add('player-active');
             currentFileName = file.name;
+            currentBookFile = file;
             fileLabel.textContent = "Libro: " + (currentFileName.length > 15 ? currentFileName.substring(0,12) + "..." : currentFileName);            // 1. Limpiar nombre del archivo (quitar extensión)
             const fileNameNoExt = currentFileName.replace(/\.[^/.]+$/, "");
             
@@ -1899,6 +2058,12 @@
             processAudioFile(file);
         }
     });    audio.onloadedmetadata = () => {
+        if (currentBookFile && isFinite(audio.duration)) {
+            updateBookMeta(currentBookFile, { duration: audio.duration });
+            const _l = document.getElementById('library-list');
+            const _c = _l && Array.from(_l.querySelectorAll('.item-reorderable')).find(x => x.dataset.id === currentFileName);
+            if (_c) setCardProgress(_c, getProgressTime(currentFileName), audio.duration);
+        }
         progressBar.max = Math.floor(audio.duration);
         updateDurationDisplay();
         updateProgressFill();
@@ -1992,6 +2157,9 @@
 
     function saveProgress() {
         if (!currentFileName) return;
+        progressMem.set(currentFileName, audio.currentTime);
+        progressSaved.set(currentFileName, Date.now());
+        updateCardProgressLive(currentFileName, audio.currentTime, audio.duration);
         // Guardar progreso en IndexedDB (persistencia absoluta)
         dbPut("progress", { name: currentFileName, time: audio.currentTime, saved: Date.now() })
             .catch(e => console.warn("Error guardando progreso:", e));
@@ -2256,6 +2424,31 @@
         markerLayer.appendChild(marker);
     }
 
+    // Desvanecido suave arriba/abajo del área con scroll (sin corte brusco)
+    (function () {
+        const init = () => {
+            const lc = document.getElementById('library-container');
+            const pc = document.querySelector('.player-container');
+            if (!lc || !pc) return;
+            const upd = () => {
+                const idle = !pc.classList.contains('player-active');
+                const max = lc.scrollHeight - lc.clientHeight;
+                lc.classList.toggle('fade-b', idle && max > 4 && lc.scrollTop < max - 6);
+                lc.classList.toggle('fade-t', idle && lc.scrollTop > 6);
+            };
+            lc.addEventListener('scroll', upd, { passive: true });
+            window.addEventListener('resize', upd);
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(upd);
+                ro.observe(lc);
+                ['library-list', 'store-section', 'st-body'].forEach(id => { const e = document.getElementById(id); if (e) ro.observe(e); });
+            }
+            new MutationObserver(upd).observe(pc, { attributes: true, attributeFilter: ['class'] });
+            upd();
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    })();
+
     // --- LÓGICA DE GESTOS (MINIMIZAR / MAXIMIZAR REPRODUCTOR) ---
     function minimizePlayer() {
         const pContainer = document.querySelector('.player-container');
@@ -2269,6 +2462,8 @@
             
             document.getElementById('mini-player').classList.add('visible');
             document.body.classList.add('has-mini-player');
+            // Reagrupar biblioteca ("En escucha") y reordenar la tienda según lo escuchado
+            try { displayLibrary(); if (typeof storeItems !== 'undefined' && storeItems.length) renderStore(); } catch (e) {}
         }
     }
 
@@ -2566,7 +2761,7 @@
 
 
     const IMG_EXT = /\.(jpe?g|png|webp)$/i;
-    let storeItems = [];
+    let storeItems = [], storeShown = false;
     function storeCollect(node, out, imgs, ctx) {
         (node.children || []).forEach(c => {
             const n = c.name || "";
@@ -2586,10 +2781,12 @@
         el.innerHTML = '';
         storeList.forEach(s => {
             const r = document.createElement('div'); r.className = 'st-srow';
-            const n = document.createElement('span'); n.textContent = s.name;
+            const n = document.createElement('span'); n.textContent = s.name; n.title = 'Toca para renombrar'; n.style.cursor = 'text';
+            n.onclick = () => renameStore(s.id, n);
+            const e = document.createElement('i'); e.className = 'material-icons st-ic'; e.textContent = 'edit'; e.title = 'Renombrar'; e.onclick = () => renameStore(s.id, n);
             const c = document.createElement('button'); c.className = 'st-btn'; c.textContent = 'Catálogo'; c.onclick = () => buildCatalog(s.id);
             const d = document.createElement('i'); d.className = 'material-icons st-ic'; d.textContent = 'delete'; d.onclick = () => removeStore(s.id);
-            r.append(n, c, d); el.appendChild(r);
+            r.append(n, e, c, d); el.appendChild(r);
         });
     }
     function renderChips() {
@@ -2608,6 +2805,28 @@
         if (!storeList.some(s => s.url === url)) storeList.push({ id: 's' + Date.now().toString(36), name: ne.value.trim() || 'Tienda ' + (storeList.length + 1), url });
         ue.value = ''; ne.value = '';
         await saveStoreList(); renderStoreList(); renderChips(); loadStore();
+    }
+    // Renombrar una tienda: el nombre se convierte en un campo editable (Enter o salir = guardar, Esc = cancelar)
+    function renameStore(id, span) {
+        const s = storeList.find(x => x.id === id);
+        if (!s || span.dataset.editing) return;
+        span.dataset.editing = '1';
+        const inp = document.createElement('input');
+        inp.value = s.name; inp.maxLength = 40; inp.style.cssText = 'flex:1;min-width:0;padding:6px 10px';
+        span.replaceWith(inp); inp.focus(); inp.select();
+        let done = false;
+        const finish = async (save) => {
+            if (done) return; done = true;
+            const v = inp.value.trim();
+            if (save && v && v !== s.name) {
+                s.name = v;
+                await saveStoreList();
+                renderChips(); renderStore();
+            }
+            renderStoreList();
+        };
+        inp.onkeydown = ev => { if (ev.key === 'Enter') finish(true); else if (ev.key === 'Escape') finish(false); };
+        inp.onblur = () => finish(true);
     }
     async function removeStore(id) {
         const s = storeList.find(x => x.id === id);
@@ -2713,6 +2932,7 @@
                     const data = cx.getImageData(0, 0, 50, 50).data;
                     const counts = {}; let maxCount = 0, domR = 0, domG = 0, domB = 0;
                     for (let i = 0; i < data.length; i += 16) {
+                        if ((i >> 2) % 50 >= COLOR_SKIP_X && ((i >> 2) / 50 | 0) >= COLOR_SKIP_Y) continue; // ignora la esquina inferior derecha (etiqueta de Audible)
                         if (data[i + 3] < 128) continue;
                         const cR = Math.round(data[i] / 16) * 16, cG = Math.round(data[i + 1] / 16) * 16, cB = Math.round(data[i + 2] / 16) * 16;
                         if (Math.abs(cR - cG) < 20 && Math.abs(cG - cB) < 20 && Math.abs(cR - cB) < 20) continue;
@@ -2763,12 +2983,23 @@
         if (author) { c.style.color = 'var(--color-principal)'; c.style.opacity = '0.8'; }
         c.appendChild(sp); return c;
     }
+    // capa de imagen con fundido: la portada nunca "salta", siempre aparece en crossfade
+    function setCardImg(th, url) {
+        const im = document.createElement('div'); im.className = 'st-img';
+        im.style.backgroundImage = url;
+        th.insertBefore(im, th.firstChild);
+        requestAnimationFrame(() => requestAnimationFrame(() => im.classList.add('on')));
+        const old = [...th.querySelectorAll('.st-img')].filter(x => x !== im);
+        if (old.length) setTimeout(() => old.forEach(x => x.remove()), 700);
+    }
+    const itemImg = it => it.cover ? 'url(' + it.cover + ')' : (it._waves = it._waves || 'url(' + generateRandomWaves() + ')');
     function mkCard(it, obs) {
         const d = document.createElement('div'); d.className = 'book-card';
         d.innerHTML = '<div class="book-thumb"></div><div class="book-label"></div>';
         const th = d.firstChild, lb = d.lastChild;
-        th.style.backgroundImage = coverUrl(it);
-        if (storeOwnedSet.includes(it.f.name)) th.innerHTML = '<i class="material-icons st-own">check</i>';
+        // con portada o ya intentado: imagen directa; si aún se está buscando, hueco neutro hasta que llegue
+        if (it.cover || it.tried) setCardImg(th, itemImg(it));
+        if (storeOwnedSet.includes(it.f.name)) th.insertAdjacentHTML('beforeend', '<i class="material-icons st-own">check</i>');
         lb.appendChild(stLine((it.title || '').toUpperCase(), false));
         lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
@@ -2780,7 +3011,8 @@
         const it = d._it; it.tried = true;
         const [u, ch] = await withSlot(() => Promise.all([getStoreCover(it), getStoreChapters(it)]));
         it.chapters = ch;
-        if (u) { it.cover = u; d.firstChild.style.backgroundImage = coverUrl(it); paintColor(it, d); }
+        if (u) { it.cover = u; paintColor(it, d); }
+        setCardImg(d.firstChild, itemImg(it));
     }
 
     // ── Agrupación automática ─────────────────────────────────────────
@@ -2833,29 +3065,89 @@
         const aut = [];
         bucket(items, i => i.author !== 'Sin autor' && i.author.toLowerCase()).filter(l => l.length >= 2)
             .sort((x, y) => cmpEs(x[0].author, y[0].author)).forEach(l => addTo(aut, l[0].author, l));
+        aut.forEach(g => g.kind = 'author');
         return [...vers, ...sagas, ...aut];
     }
 
+    // Perfil de escucha: qué libros y autores has escuchado (y cuáles estás escuchando ahora)
+    async function getListeningProfile() {
+        await Promise.all([loadAllMeta(), loadAllProgress()]);
+        const byName = new Map(); storeItems.forEach(i => byName.set(i.f.name, i));
+        const metaByName = new Map(); metaMem.forEach(e => metaByName.set(e.name, e));
+        const names = new Map(), authors = new Map();
+        progressMem.forEach((time, name) => {
+            if (!(time > 0)) return;
+            const meta = metaByName.get(name);
+            const live = !isFinished(time, meta && meta.duration);
+            const ts = progressSaved.get(name) || 0;
+            names.set(name, { live, ts });
+            let a = byName.get(name) ? byName.get(name).author : '';
+            if (!a && meta) a = meta.artist;
+            if (!a) a = splitAT(name.replace(/\.[^/.]+$/, ''))[1];
+            if (a && !/^(sin autor|autor desconocido)$/i.test(a.trim())) {
+                const k = normT(a), cur = authors.get(k);
+                if (k && (!cur || (live && !cur.live) || (live === cur.live && ts > cur.ts))) authors.set(k, { live, ts, label: a });
+            }
+        });
+        return { names, authors };
+    }
+
+    let storeRenderTok = 0;
     async function renderStore() {
+        const tok = ++storeRenderTok;
         const body = document.getElementById('st-body');
         storeOwnedSet = await storeOwned();
+        if (tok !== storeRenderTok) return;
         const q = document.getElementById('st-q').value.toLowerCase().trim();
         const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { obs.unobserve(e.target); lazyCover(e.target); } }), { rootMargin: '200px' });
         body.innerHTML = '';
-        document.getElementById('store-section').style.display = storeItems.length ? 'block' : 'none';
-        const row = (title, list, grid) => {
+        const sec = document.getElementById('store-section');
+        sec.style.display = storeItems.length ? 'block' : 'none';
+        // Solo la primera vez que aparece la tienda: entrada escalonada en vez de "pop"
+        const animate = !!storeItems.length && !storeShown && !q;
+        if (animate) {
+            storeShown = true;
+            body.classList.add('st-anim');
+            setTimeout(() => body.classList.remove('st-anim'), 3500);
+        }
+        let rowIdx = 0;
+        const row = (title, list, grid, tag) => {
             if (!list.length) return;
             const r = document.createElement('div'); r.className = 'st-row';
+            r.style.setProperty('--rd', (0.15 + Math.min(rowIdx++, 6) * 0.12) + 's');
             r.innerHTML = '<h4></h4><div class="' + (grid ? 'st-grid' : 'st-scroll') + '"></div>';
             r.firstChild.textContent = title;
-            list.forEach(it => r.lastChild.appendChild(mkCard(it, obs)));
+            if (tag) { const t = document.createElement('span'); t.className = 'st-tag'; t.textContent = tag; r.firstChild.appendChild(t); }
+            list.forEach((it, i) => { const c = mkCard(it, obs); c.style.setProperty('--cd', Math.min(i, 8) * 0.05 + 's'); r.lastChild.appendChild(c); });
             body.appendChild(r);
         };
         const byTitle = (x, y) => cmpEs(x.title, y.title);
         const items = storeFilter === 'all' ? storeItems : storeItems.filter(i => i.sid === storeFilter);
         if (q) { row('Resultados', items.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
         const used = new Set();
-        storeGroups(items).forEach(g => { g.list.forEach(i => used.add(i.f.name)); row(g.name, g.list.sort(byTitle)); });
+        // Primero los grupos (autor / saga / versiones) de lo que estás escuchando o has escuchado
+        let prof = { names: new Map(), authors: new Map() };
+        try { prof = await getListeningProfile(); } catch (e) {}
+        if (tok !== storeRenderTok) return;
+        const groups = storeGroups(items);
+        const rankOf = (g) => {
+            let best = null;
+            const consider = (o) => { if (!best || (o.live ? 2 : 1) > best.s || ((o.live ? 2 : 1) === best.s && o.ts > best.ts)) best = { s: o.live ? 2 : 1, ts: o.ts || 0 }; };
+            g.list.forEach(i => { const n = prof.names.get(i.f.name); if (n) consider(n); });
+            if (g.kind === 'author') { const a = prof.authors.get(normT(g.name)); if (a) consider(a); }
+            return best;
+        };
+        const ranked = groups.map((g, idx) => ({ g, idx, r: rankOf(g) }));
+        // autores escuchados que no tienen grupo propio en la tienda (p. ej. un solo libro suyo)
+        prof.authors.forEach((a, k) => {
+            if (groups.some(g => g.kind === 'author' && normT(g.name) === k)) return;
+            const list = items.filter(i => i.author && normT(i.author) === k);
+            if (list.length) ranked.push({ g: { name: 'Más de ' + (list[0].author || a.label), list, kind: 'author' }, idx: 9999, r: { s: a.live ? 2 : 1, ts: a.ts || 0 } });
+        });
+        const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx));
+        const rest = ranked.filter(x => !x.r);
+        hits.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byTitle), false, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'); });
+        rest.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byTitle)); });
         row('Más audiolibros', items.filter(i => !used.has(i.f.name)).sort(byTitle));
     }
 
