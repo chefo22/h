@@ -808,7 +808,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 #st-body.st-anim .st-row .book-card{animation:stRise .7s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--rd,0s) + var(--cd,0s))}
 @media (prefers-reduced-motion:reduce){#st-body.st-anim .st-row h4,#st-body.st-anim .st-row .book-card{animation:none}}
 </style>
-    <div id="st-sheet" onclick="if(event.target===this){this.style.display='none';stopPreview()}">
+    <div id="st-sheet" onclick="if(event.target===this)this.style.display='none'">
         <div class="st-sheetbox">
             <div class="st-cover"></div>
             <div class="st-ht st-dt" style="margin-top:10px"></div>
@@ -823,7 +823,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 </div>
                 <button class="st-btn" id="st-esv" style="width:100%">GUARDAR</button>
             </div>
-            <button class="st-btn" id="st-pv" style="width:100%;background:#2a2a2a;margin-bottom:4px">▶ ESCUCHAR AVANCE</button>
             <button class="st-btn" id="st-ed" style="width:100%;background:#2a2a2a;margin-bottom:4px">✎ EDITAR TÍTULO Y AUTOR</button>
             <button class="st-btn" id="st-dl" style="width:100%;padding:14px">DESCARGAR</button>
         </div>
@@ -3527,8 +3526,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(it.f.name);
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
-        stopPreview();
-        document.getElementById('st-pv').onclick = () => togglePreview(it);
         sh._it = it; paintColor(it, sh, true);
         const infoEl = sh.querySelector('.st-di');
         const resetBtn = () => { b.style.background = ''; b.style.color = ''; };
@@ -3644,101 +3641,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
     }
 
-
-    // ── Avance (preview) sin descargar el libro ───────────────────────
-    // Se baja solo el principio (~2,5 MB) y se reproduce desde memoria. En M4A/M4B con el índice (moov)
-    // al final del archivo se reconstruye un MP4 válido: ftyp + moov (con offsets corregidos) + inicio del audio.
-    const PREVIEW_BYTES = 2.5 * 1048576, PREVIEW_SECS = 90;
-    let pvAudio = null, pvItem = null, pvUrl = null;
-    function mp4Boxes(b) {
-        const out = []; let o = 0;
-        while (o + 8 <= b.length) {
-            let sz = u32(b, o), hdr = 8; const t = fourcc(b, o + 4);
-            if (sz === 1 && o + 16 <= b.length) { sz = u32(b, o + 8) * 4294967296 + u32(b, o + 12); hdr = 16; }
-            out.push({ t, o, sz, hdr });
-            if (sz < 8) break;
-            o += sz;
-        }
-        return out;
-    }
-    function patchChunkOffsets(moov, shift) {
-        const dv = new DataView(moov.buffer, moov.byteOffset, moov.byteLength);
-        for (let i = 4; i + 16 <= moov.length; i++) {
-            const t = fourcc(moov, i);
-            if (t === 'stco') {
-                const n = dv.getUint32(i + 8);
-                if (i + 12 + n * 4 > moov.length) continue;
-                for (let k = 0; k < n; k++) dv.setUint32(i + 12 + k * 4, dv.getUint32(i + 12 + k * 4) + shift);
-            } else if (t === 'co64') {
-                const n = dv.getUint32(i + 8);
-                if (i + 12 + n * 8 > moov.length) continue;
-                for (let k = 0; k < n; k++) dv.setBigUint64(i + 12 + k * 8, dv.getBigUint64(i + 12 + k * 8) + BigInt(shift));
-            }
-        }
-    }
-    async function buildPreviewBlob(it) {
-        const rec = await localBookRecord(it.f.name);
-        const node = rec && rec.data ? localNode(rec.data) : it.f;
-        const total = node.size || 0;
-        const head = await headBlob(node, PREVIEW_BYTES);
-        const bytes = new Uint8Array(await head.arrayBuffer());
-        const ext = it.f.name.split('.').pop().toLowerCase();
-        if (!(bytes.length > 8 && fourcc(bytes, 4) === 'ftyp')) return new Blob([bytes], { type: MIME[ext] || 'audio/mpeg' });
-        const top = mp4Boxes(bytes);
-        const mdat = top.find(x => x.t === 'mdat'), moovH = top.find(x => x.t === 'moov');
-        if (moovH && mdat && moovH.o < mdat.o && moovH.o + moovH.sz <= bytes.length) return new Blob([bytes], { type: 'audio/mp4' }); // índice al principio: se reproduce tal cual
-        if (!mdat) throw new Error('estructura MP4 no reconocida');
-        const asm = await mp4Assemble(node, bytes, total || bytes.length, () => {});
-        if (!asm) throw new Error('no encontré el índice del audio');
-        const ab = new Uint8Array(await asm.arrayBuffer());
-        const ftyp = top.find(x => x.t === 'ftyp'), parts = mp4Boxes(ab);
-        const mv = parts.find(x => x.t === 'moov');
-        if (!ftyp || !mv) throw new Error('índice incompleto');
-        const moov = ab.slice(mv.o, mv.o + mv.sz);
-        const dataStart = mdat.o + mdat.hdr, data = bytes.slice(dataStart);
-        const newStart = ftyp.sz + moov.length + 8;
-        patchChunkOffsets(moov, newStart - dataStart);
-        const mh = new Uint8Array(8); new DataView(mh.buffer).setUint32(0, 8 + data.length); mh.set([0x6d, 0x64, 0x61, 0x74], 4);
-        return new Blob([bytes.slice(ftyp.o, ftyp.o + ftyp.sz), moov, mh, data], { type: 'audio/mp4' });
-    }
-    function pvButton(text, pct) {
-        const b = document.getElementById('st-pv'); if (!b) return;
-        b.textContent = text;
-        b.style.background = pct == null ? '#2a2a2a' : 'linear-gradient(90deg,var(--color-principal) ' + pct + '%,#2a2a2a ' + pct + '%)';
-    }
-    function stopPreview() {
-        if (pvAudio) { try { pvAudio.pause(); } catch (e) {} pvAudio.removeAttribute('src'); pvAudio = null; }
-        if (pvUrl) { URL.revokeObjectURL(pvUrl); pvUrl = null; }
-        pvItem = null;
-        const b = document.getElementById('st-pv'); if (b) { b.disabled = false; pvButton('▶ ESCUCHAR AVANCE', null); }
-    }
-    async function togglePreview(it) {
-        if (pvItem === it) { stopPreview(); return; }   // segundo toque = parar
-        stopPreview();
-        pvItem = it;
-        const b = document.getElementById('st-pv');
-        try { if (typeof audio !== 'undefined' && !audio.paused) audio.pause(); } catch (e) {}
-        try {
-            if (!it._pv) { b.disabled = true; pvButton('Cargando avance…', 0); it._pv = await buildPreviewBlob(it); }
-            if (pvItem !== it) return;                    // cambió de libro o cerró la ficha mientras cargaba
-            b.disabled = false;
-            pvUrl = URL.createObjectURL(it._pv);
-            const a = pvAudio = new Audio(pvUrl);
-            a.ontimeupdate = () => {
-                if (pvAudio !== a) return;
-                const lim = Math.min(PREVIEW_SECS, isFinite(a.duration) ? a.duration : PREVIEW_SECS);
-                pvButton('⏸ AVANCE ' + formatTime(a.currentTime).replace(/^0:/, '') + ' · TOCA PARA PARAR', Math.min(100, a.currentTime / lim * 100));
-                if (a.currentTime >= PREVIEW_SECS) stopPreview();
-            };
-            a.onended = () => { if (pvAudio === a) stopPreview(); };
-            a.onerror = () => { if (pvAudio === a) { stopPreview(); pvButton('No se pudo reproducir el avance', null); } };
-            pvButton('⏸ AVANCE · TOCA PARA PARAR', 0);
-            await a.play();
-        } catch (e) {
-            if (pvItem === it) { stopPreview(); pvButton('Avance no disponible', null); }
-            console.warn('Avance:', e);
-        }
-    }
 
     // Genera catalog.json (portadas pequeñas + metadatos). Se hace una sola vez; luego se sube a la carpeta de MEGA.
     function shrinkCover(url, max) {
