@@ -1920,7 +1920,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         }
         let title = meta.title, artist = meta.artist, artworkUrl = '';
         if (title) {
-            title = title.replace(/\.[^/.]+$/, "").replace(/^\d+\.\d+\s+(?=\D)/, "");
+            title = title.replace(/\.[^/.]+$/, "").replace(/^\d+\.\d+(?:\.\d+)?\s+(?=\D)/, "");
             if (title.includes("-") && (!artist || artist === "Autor Desconocido")) {
                 const r = splitAT(title);
                 title = r[0];
@@ -2866,11 +2866,11 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             const m = parseStoreName(f.name), c0 = catalog[f.name + '|' + (f.size || 0)] || (nameCount[f.name] === 1 ? catalog[f.name] : null) || {};
             // las portadas de un catálogo solo se aceptan si es de la versión nueva (hecho únicamente con portadas incrustadas)
             const c = (catalog.__v === 2 && catalog[f.name + '|' + (f.size || 0)]) ? c0 : { ...c0, cv: null };
-            let t0 = c.t || m.title, ser = m.ser, idx = m.idx; const saga = m.saga; let note = m.note;
-            const pn = parseNum(t0); if (pn) { t0 = pn.rest; if (ser == null) { ser = pn.ser; idx = pn.idx; } }
+            let t0 = c.t || m.title, ser = m.ser, idx = m.idx, sub = m.sub; const saga = m.saga; let note = m.note;
+            const pn = parseNum(t0); if (pn) { t0 = pn.rest; if (ser == null) { ser = pn.ser; idx = pn.idx; sub = pn.sub; } }
             if (saga && t0.toLowerCase().startsWith(saga.toLowerCase() + ' - ')) t0 = t0.slice(saga.length + 3).trim();
             { const u = unNote(t0); t0 = u.t; if (!note && u.note) note = u.note; }
-            return { f, sid: s.id, covers: imgs, t0, ser, idx, saga, note, a0: c.a || m.author, title: '', author: '', cover: c.cv || null, chapters: c.ch || null, ts: f.timestamp || 0, tried: !!ctx.cat, _done: !!ctx.cat };
+            return { f, sid: s.id, covers: imgs, t0, ser, idx, sub, saga, note, a0: c.a || m.author, title: '', author: '', cover: c.cv || null, chapters: c.ch || null, ts: f.timestamp || 0, tried: !!ctx.cat, _done: !!ctx.cat };
         });
         return { items, hasCatalog: !!ctx.cat };
     }
@@ -2922,13 +2922,13 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     function splitAT(name) {
         const p = name.split(/\s+-\s+/).length > 1 ? name.split(/\s+-\s+/) : name.split("-");
         const q = p.map(x => x.trim()).filter(Boolean);
-        if (q.length >= 3 && /^\d+\.\d+\s/.test(q[1])) return [unNote(q.slice(2).join(" - ")).t, q[0]];   // Autor - X.Y Saga - Título
-        return q.length >= 2 ? [unNote(q.slice(1).join(" - ").replace(/^\d+\.\d+\s*[-–.:]?\s*/, "")).t, q[0]] : [name, ""];
+        if (q.length >= 3 && /^\d+\.\d+(?:\.\d+)?\s/.test(q[1])) return [unNote(q.slice(2).join(" - ")).t, q[0]];   // Autor - X.Y Saga - Título
+        return q.length >= 2 ? [unNote(q.slice(1).join(" - ").replace(/^\d+\.\d+(?:\.\d+)?\s*[-–.:]?\s*/, "")).t, q[0]] : [name, ""];
     }
     // Formato de nombre: "Autor - X.Y Título (nota).ext"  →  X = colección/saga, Y = orden dentro de ella; "(nota)" = traductor, narrador, edición…
     function parseNum(t) {
-        const m = /^\s*(\d+)\.(\d+)\s*[-–.:]?\s*(.+)$/.exec(t || "");
-        return m ? { ser: +m[1], idx: +m[2], rest: m[3].trim() } : null;
+        const m = /^\s*(\d+)\.(\d+)(?:\.(\d+))?(?!\d)\s*[-–.:]?\s*(.+)$/.exec(t || "");
+        return m ? { ser: +m[1], idx: +m[2], sub: m[3] != null ? +m[3] : null, rest: m[4].trim() } : null;
     }
     // título/autor mostrados = valor original
     function applyMeta() {
@@ -2945,12 +2945,12 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const sp = clean.split(/\s+-\s+/).map(x => x.trim()).filter(Boolean);
         if (storeSwap && sp.length >= 3) {
             const ps = parseNum(sp[1]);
-            if (ps) { const u = unNote(sp.slice(2).join(" - ")); return { title: u.t, note: u.note, author: sp[0], ser: ps.ser, idx: ps.idx, saga: ps.rest }; }
+            if (ps) { const u = unNote(sp.slice(2).join(" - ")); return { title: u.t, note: u.note, author: sp[0], ser: ps.ser, idx: ps.idx, sub: ps.sub, saga: ps.rest }; }
         }
         const pn = parseNum(title);
-        if (pn) { const u = unNote(pn.rest); return { title: u.t, note: u.note, author, ser: pn.ser, idx: pn.idx, saga: null }; }
+        if (pn) { const u = unNote(pn.rest); return { title: u.t, note: u.note, author, ser: pn.ser, idx: pn.idx, sub: pn.sub, saga: null }; }
         const u = unNote(title);
-        return { title: u.t, note: u.note, author, ser: null, idx: null, saga: null };
+        return { title: u.t, note: u.note, author, ser: null, idx: null, sub: null, saga: null };
     }
     const cmpEs = (x, y) => x.localeCompare(y, 'es', { sensitivity: 'base', numeric: true });
     // Identidad de un libro de la tienda: nombre + tamaño. Mismo nombre con distinto tamaño = libros distintos.
@@ -3112,7 +3112,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         // 0) colecciones por numeración "X.Y" del nombre de archivo: mismo autor y mismo X
         const noPar = t => t.replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ').replace(/\s+/g, ' ').trim();
         const serName = list => {
-            const ord = list.slice().sort((a, b) => a.idx - b.idx);
+            const ord = list.slice().sort((a, b) => (a.idx - b.idx) || ((a.sub || 0) - (b.sub || 0)));
             const named = ord.find(i => i.saga); if (named) return named.saga;   // saga indicada en el nombre del archivo
             const toks = ord.map(i => noPar(i.title).split(' '));
             // prefijo de palabras común a todos los títulos ("El señor de los Anillos - La Comunidad…", "… - Las Dos Torres" → "El señor de los Anillos")
@@ -3219,7 +3219,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         };
         const byTitle = (x, y) => cmpEs(x.title, y.title);
         // dentro de una saga/autor: por número de colección y orden (1.1, 1.2, … 1.10); si faltan números, por título
-        const byOrder = (x, y) => (x.idx != null && y.idx != null) ? (cmpEs(x.author, y.author) || (x.ser - y.ser) || (x.idx - y.idx) || cmpEs(x.title, y.title)) : cmpEs(x.title, y.title);
+        const byOrder = (x, y) => (x.idx != null && y.idx != null) ? (cmpEs(x.author, y.author) || (x.ser - y.ser) || (x.idx - y.idx) || ((x.sub || 0) - (y.sub || 0)) || cmpEs(x.title, y.title)) : cmpEs(x.title, y.title);
         const items = storeFilter === 'all' ? storeItems : storeItems.filter(i => i.sid === storeFilter);
         if (q) { row('Resultados', items.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
         const used = new Set();
@@ -3247,7 +3247,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             if (list.length && nonAuthorSigs.has(grpSig(list))) return;
             if (list.length) ranked.push({ g: { name: 'Más de ' + (list[0].author || a.label), list, kind: 'author' }, idx: 9999, r: { s: a.live ? 2 : 1, ts: a.ts || 0 } });
         });
-        const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx));
+        const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx) || ((x.sub || 0) - (y.sub || 0)));
         const rest = ranked.filter(x => !x.r);
         hits.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'], x.g.color); });
         rest.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, x.g.tag, x.g.color); });
@@ -3503,7 +3503,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         sh.querySelector('.st-da').textContent = it.author;
         const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
         const sn = storeList.length > 1 ? ((storeList.find(x => x.id === it.sid) || {}).name || '') : '';
-        sh.querySelector('.st-di').textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx : '', publisherName(it.note), mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
+        sh.querySelector('.st-di').textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx + (it.sub != null ? '.' + it.sub : '') : '', publisherName(it.note), mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
         if (!it.cover) {   // por qué no hay portada: lo que dijo el análisis del propio archivo
             const dg = storeDiag[it.f.name];
             sh.querySelector('.st-di').textContent += (sh.querySelector('.st-di').textContent ? ' · ' : '') + 'Sin portada en el archivo' + (dg ? ' (' + dg + ')' : '');
