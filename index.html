@@ -722,7 +722,6 @@
             </div>
         </div>
         <div id="store-section">
-            <h3 style="font-size:.65rem;margin:18px 0 0;color:var(--color-principal);letter-spacing:4px;opacity:.6;font-weight:900;text-align:center;text-indent:4px;">TIENDA</h3>
             <div id="st-body"></div>
         </div>
     </div>
@@ -752,9 +751,10 @@
 .st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
 #store-section{display:none;padding-bottom:90px;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
-.st-scroll{display:flex;gap:10px;overflow-x:auto;padding:0 0 4px;scrollbar-width:none}
+.st-scroll{display:flex;gap:14px;overflow-x:auto;padding:5px 0;scrollbar-width:none}
+.st-scroll .book-card{flex:none}
 .st-scroll::-webkit-scrollbar{display:none}
-.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+.st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:clamp(10px,3vw,20px);padding:10px 0;justify-items:center;align-items:start}
 .st-card{flex:none;width:104px;cursor:pointer}
 .st-grid .st-card{width:auto}
 .st-cover{width:100%;aspect-ratio:1;border-radius:10px;background:#1a1a1a center/cover;position:relative}
@@ -1246,6 +1246,120 @@
     }
     // ────────────────────────────────────────────────────────────────────
 
+    // ── Caché persistente de metadata ────────────────────────────────────
+    // Clave = nombre + tamaño del archivo. Guarda título, autor, carátula,
+    // color dominante y capítulos, para no volver a leer/analizar el archivo.
+    const metaMem = new Map();
+    const metaInflight = new Map();
+    let metaLoadPromise = null;
+    const metaKey = (f) => f.name + '|' + f.size;
+
+    function loadAllMeta() {
+        if (!db) return Promise.resolve();
+        if (metaLoadPromise) return metaLoadPromise;
+        metaLoadPromise = new Promise((resolve) => {
+            try {
+                const req = db.transaction(['metaCache'], 'readonly').objectStore('metaCache').getAll();
+                req.onsuccess = () => { (req.result || []).forEach(e => metaMem.set(e.key, e)); resolve(); };
+                req.onerror = () => resolve();
+            } catch (e) { resolve(); }
+        });
+        return metaLoadPromise;
+    }
+
+    function newMetaEntry(file, p) {
+        return Object.assign({
+            key: metaKey(file), name: file.name, size: file.size,
+            title: null, artist: null, cover: null,
+            color: null, chapters: null, ok: false, cachedAt: Date.now()
+        }, p || {});
+    }
+
+    function readTags(file) {
+        return new Promise((resolve) => {
+            try {
+                window.jsmediatags.read(file, {
+                    onSuccess: (tag) => {
+                        const { title, artist, picture } = (tag && tag.tags) || {};
+                        let cover = null;
+                        if (picture) {
+                            let b = "";
+                            for (let i = 0; i < picture.data.length; i++) b += String.fromCharCode(picture.data[i]);
+                            cover = `data:${picture.format};base64,${window.btoa(b)}`;
+                        }
+                        resolve({ title: title || null, artist: artist || null, cover, ok: true });
+                    },
+                    onError: () => resolve({ ok: false })
+                });
+            } catch (e) { resolve({ ok: false }); }
+        });
+    }
+
+    // Devuelve la metadata desde la caché; solo lee el archivo la primera vez.
+    async function getBookMeta(file) {
+        await loadAllMeta();
+        const key = metaKey(file);
+        const hit = metaMem.get(key);
+        if (hit) return hit;
+        if (metaInflight.has(key)) return metaInflight.get(key);
+        const pr = readTags(file).then(t => {
+            const e = newMetaEntry(file, t);
+            metaMem.set(key, e);
+            dbPut('metaCache', e).catch(() => {});
+            metaInflight.delete(key);
+            return e;
+        });
+        metaInflight.set(key, pr);
+        return pr;
+    }
+
+    function updateBookMeta(file, patch) {
+        const key = metaKey(file);
+        const e = Object.assign(metaMem.get(key) || newMetaEntry(file), patch);
+        metaMem.set(key, e);
+        dbPut('metaCache', e).catch(() => {});
+        return e;
+    }
+
+    // Color dominante vibrante de una imagen ya cargada (devuelve hex)
+    function dominantColorHex(img) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 50; canvas.height = 50;
+        ctx.drawImage(img, 0, 0, 50, 50);
+        const data = ctx.getImageData(0, 0, 50, 50).data;
+        let counts = {}, maxCount = 0, domR = 0, domG = 0, domB = 0;
+        for (let i = 0; i < data.length; i += 16) {
+            if (data[i+3] < 128) continue;
+            const cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
+            if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
+            const k = cR+','+cG+','+cB;
+            counts[k] = (counts[k] || 0) + 1;
+            if (counts[k] > maxCount) { maxCount = counts[k]; domR = data[i]; domG = data[i+1]; domB = data[i+2]; }
+        }
+        if (maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
+        const r = domR/255, g = domG/255, b = domB/255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max === min) h = s = 0;
+        else {
+            const diff = max - min;
+            s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
+            if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
+            else if (max === g) h = (b - r) / diff + 2;
+            else h = (r - g) / diff + 4;
+            h /= 6;
+        }
+        const fH = isNaN(h) ? 0.58 : h;
+        const fS = isNaN(s) ? 0.85 : Math.min(Math.max(s, 0.75), 0.9);
+        const fL = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65);
+        const f = (p, q, t) => { if (t<0) t+=1; if (t>1) t-=1; if (t<1/6) return p+(q-p)*6*t; if (t<1/2) return q; if (t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+        const q = fL < 0.5 ? fL*(1+fS) : fL+fS-fL*fS, pp = 2*fL-q;
+        const toH = x => Math.round(f(pp, q, x)*255).toString(16).padStart(2, '0');
+        return `#${toH(fH+1/3)}${toH(fH)}${toH(fH-1/3)}`;
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     let reorderMode = false;
     let pressTimer;
     let draggedItem = null;
@@ -1277,7 +1391,7 @@
         if (navigator.storage && navigator.storage.persist) {
             const isPersisted = await navigator.storage.persist();
             console.log(`Persistencia de datos: ${isPersisted ? "Garantizada" : "Temporal"}`);
-        }        const dbRequest = indexedDB.open("AudiobookProDB", 3);
+        }        const dbRequest = indexedDB.open("AudiobookProDB", 4);
 
         dbRequest.onupgradeneeded = (e) => {
             db = e.target.result;
@@ -1291,6 +1405,9 @@
             }
             if (!db.objectStoreNames.contains("chapters")) {
                 db.createObjectStore("chapters", { keyPath: "name" });
+            }
+            if (!db.objectStoreNames.contains("metaCache")) {
+                db.createObjectStore("metaCache", { keyPath: "key" });
             }
         };        dbRequest.onsuccess = (e) => {
             db = e.target.result;
@@ -1354,6 +1471,12 @@
             if (!meta.cover && file._storeCover) meta.cover = file._storeCover;
             if (file._storeTitle) meta.title = file._storeTitle;
             if (file._storeAuthor) meta.artist = file._storeAuthor;
+            if (file._storeCover || file._storeTitle || file._storeAuthor) {
+                const prev = metaMem.get(metaKey(file));
+                const patch = { title: meta.title || null, artist: meta.artist || null, cover: meta.cover || null, ok: true };
+                if (!prev || prev.cover !== patch.cover) patch.color = null;
+                updateBookMeta(file, patch);
+            }
             // Actualizar UI optimista con carátula real ANTES del guardado IDB pesado
             if (tempCard) {
                 if (meta.cover) tempCard.querySelector('.book-thumb').style.backgroundImage = `url(${meta.cover})`;
@@ -1396,26 +1519,11 @@
             }, 50);
         };
 
-        try {
-            window.jsmediatags.read(file, {
-                onSuccess: (tag) => {
-                    let meta = {};
-                    const { title, artist, picture } = (tag && tag.tags) || {};
-                    if (title) meta.title = title;
-                    if (artist) meta.artist = artist;
-                    if (picture) {
-                        let b = ""; 
-                        for (let i = 0; i < picture.data.length; i++) b += String.fromCharCode(picture.data[i]);
-                        meta.cover = `data:${picture.format};base64,${window.btoa(b)}`;
-                    }
-                    doSave(meta);
-                },
-                onError: () => doSave({})
-            });
-        } catch (e) {
-            doSave({});
-        }
-    }    function displayLibrary() {
+        getBookMeta(file)
+            .then(m => doSave({ title: m.title, artist: m.artist, cover: m.cover }))
+            .catch(() => doSave({}));
+    }    function displayLibrary() { loadAllMeta().then(renderLibrary); }
+    function renderLibrary() {
         const list = document.getElementById('library-list');
         if (!list) return;
         list.innerHTML = "";
@@ -1437,6 +1545,20 @@
                 
                 books.forEach(bookData => {
                     const bookName = bookData.name;
+                    // Metadata desde la caché (nombre+tamaño); migra libros antiguos sin releer el archivo
+                    let m = null;
+                    if (bookData.data) {
+                        const mk = metaKey(bookData.data);
+                        m = metaMem.get(mk);
+                        if (!m) {
+                            m = newMetaEntry(bookData.data, { title: bookData.metaTitle || null, artist: bookData.metaArtist || null, cover: bookData.metaCover || null, ok: !!(bookData.metaTitle || bookData.metaArtist || bookData.metaCover) });
+                            metaMem.set(mk, m);
+                            dbPut('metaCache', m).catch(() => {});
+                        }
+                    }
+                    const mTitle = m ? m.title : bookData.metaTitle;
+                    const mArtist = m ? m.artist : bookData.metaArtist;
+                    const mCover = m ? m.cover : bookData.metaCover;
                     const card = document.createElement('div');                    card.className = 'book-card item-reorderable';
                     card.draggable = true;
                     card.dataset.id = bookName;
@@ -1518,10 +1640,10 @@
             });
 
                     list.appendChild(card);                    // Aplicar Metadatos en Caché (Sin Bloqueo de Memoria)
-                    if (bookData.metaTitle || bookData.metaArtist) {
+                    if (mTitle || mArtist) {
                         const labelEl = card.querySelector('.book-label');
-                        let cleanTitle = (bookData.metaTitle || bookName).replace(/\.[^/.]+$/, "").toUpperCase();
-                        let cleanArtist = (bookData.metaArtist || "Autor Desconocido").toUpperCase();
+                        let cleanTitle = (mTitle || bookName).replace(/\.[^/.]+$/, "").toUpperCase();
+                        let cleanArtist = (mArtist || "Autor Desconocido").toUpperCase();
                         const checkScroll = (txt) => txt.length > 16 ? 'active-scroll' : '';
                         const spacer = "&nbsp;".repeat(10);
                         const tCont = checkScroll(cleanTitle) ? (cleanTitle + spacer).repeat(2) : cleanTitle;
@@ -1530,64 +1652,30 @@
                                            `<div class="marquee-container ${checkScroll(cleanArtist)}" style="color: var(--color-principal);"><span class="marquee-text">${aCont}</span></div>`;
                     }
                     
-                    if (bookData.metaCover) {
-                        thumb.style.backgroundImage = `url(${bookData.metaCover})`;
+                    if (mCover) {
+                        thumb.style.backgroundImage = `url(${mCover})`;
                         const icon = thumb.querySelector('.material-icons');
-                        if (icon) icon.style.display = 'none';                        // Status Dot Camaleón Seguro: Color dominante vibrante
-                        const imgDot = new Image();
-                        imgDot.src = bookData.metaCover;
-                        imgDot.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const ctx = canvas.getContext('2d');
-                            canvas.width = 50; canvas.height = 50;
-                            ctx.drawImage(imgDot, 0, 0, 50, 50);
-                            const data = ctx.getImageData(0, 0, 50, 50).data;
-                            let counts = {}, maxCount = 0;
-                            let domR = 0, domG = 0, domB = 0;
-                            for (let i = 0; i < data.length; i += 16) {
-                                if (data[i+3] < 128) continue;
-                                let cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
-                                // Ignorar grises desaturados para el status dot y el autor
-                                if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
-                                let key = cR+','+cG+','+cB;
-                                counts[key] = (counts[key] || 0) + 1;
-                                if (counts[key] > maxCount) {
-                                    maxCount = counts[key];
-                                    domR = data[i]; domG = data[i+1]; domB = data[i+2];
-                                }
-                            }
-                            if(maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
-                            let r = domR/255, g = domG/255, b = domB/255;
-                            let max = Math.max(r, g, b), min = Math.min(r, g, b);
-                            let h, s, l = (max + min) / 2;
-                            if (max === min) h = s = 0; 
-                            else {
-                                let diff = max - min;
-                                s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
-                                if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
-                                else if (max === g) h = (b - r) / diff + 2;
-                                else h = (r - g) / diff + 4;
-                                h /= 6;
-                            }
-                            // Normalizar igual que el player: saturación alta, luminosidad vibrante
-                            let finalH = isNaN(h) ? 0.58 : h;
-                            let finalS = isNaN(s) ? 0.85 : Math.min(Math.max(s, 0.75), 0.9);
-                            let finalL = isNaN(l) ? 0.6  : Math.min(Math.max(l, 0.55), 0.65);
-                            // hslToHex local (h en 0-1, s/l en 0-1)
-                            const _hslToHexLocal = (hh, ss, ll) => {
-                                const f=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
-                                const q=ll<0.5?ll*(1+ss):ll+ss-ll*ss,p=2*ll-q;
-                                const toH=x=>Math.round(f(p,q,x)*255).toString(16).padStart(2,'0');
-                                return `#${toH(hh+1/3)}${toH(hh)}${toH(hh-1/3)}`;
-                            };
-                            const extractedColor = _hslToHexLocal(finalH, finalS, finalL);
-                            // Guardar en caché para poder aplicarlo al instante cuando el usuario haga clic
-                            bookColorCache[bookName] = extractedColor;
+                        if (icon) icon.style.display = 'none';                        // Color dominante: de la caché si existe; si no, se calcula una vez y se guarda
+                        const applyCardColor = (color) => {
+                            bookColorCache[bookName] = color;
                             const dot = card.querySelector('.status-dot');
-                            if (dot) dot.style.backgroundColor = extractedColor;
+                            if (dot) dot.style.backgroundColor = color;
                             const secondLine = card.querySelector('.book-label div:nth-child(2)');
-                            if (secondLine) secondLine.style.color = extractedColor;
+                            if (secondLine) secondLine.style.color = color;
                         };
+                        if (m && m.color) {
+                            applyCardColor(m.color);
+                        } else {
+                            const imgDot = new Image();
+                            imgDot.src = mCover;
+                            imgDot.onload = () => {
+                                try {
+                                    const hex = dominantColorHex(imgDot);
+                                    applyCardColor(hex);
+                                    if (m) updateBookMeta(bookData.data, { color: hex });
+                                } catch (err) { console.error(err); }
+                            };
+                        }
                     } else {
                         const waveUrl = generateRandomWaves();
                         thumb.style.backgroundImage = `url(${waveUrl})`;
@@ -1607,8 +1695,17 @@
         };
     }    function deleteFromLibrary(name) {
         if (!confirm("¿Eliminar este libro de la memoria?")) return;
-        const transaction = db.transaction(["books"], "readwrite");
-        transaction.objectStore("books").delete(name);
+        const transaction = db.transaction(["books", "metaCache"], "readwrite");
+        const bookStore = transaction.objectStore("books");
+        bookStore.get(name).onsuccess = (ev) => {
+            const b = ev.target.result;
+            if (b && b.data) {
+                const k = metaKey(b.data);
+                metaMem.delete(k);
+                transaction.objectStore("metaCache").delete(k);
+            }
+            bookStore.delete(name);
+        };
         transaction.oncomplete = () => {
             if (currentFileName === name) location.reload();
             else displayLibrary();
@@ -1640,7 +1737,69 @@
                 setTimeout(() => timerMsg.textContent = "", 2000);
             }
         };
-    }    function processAudioFile(file) {
+    }    // Aplica al reproductor la metadata (desde caché) de un archivo
+    function applyPlayerMeta(meta, file) {
+        const authorEl = document.getElementById('author');
+        const img = document.getElementById('cover-art');
+        const miniThumb = document.getElementById('mini-player-thumb');
+        if (!meta || !meta.ok) {
+            authorEl.textContent = "Reproductor Local";
+            const miniAuthor = document.getElementById('mini-author');
+            if (miniAuthor) miniAuthor.textContent = "Reproductor Local";
+            const waveUrl = generateRandomWaves();
+            img.src = waveUrl;
+            if (miniThumb) miniThumb.src = waveUrl;
+            document.getElementById('cover-container').style.display = 'block';
+            return;
+        }
+        let title = meta.title, artist = meta.artist, artworkUrl = '';
+        if (title) {
+            title = title.replace(/\.[^/.]+$/, "");
+            if (title.includes("-") && (!artist || artist === "Autor Desconocido")) {
+                const r = splitAT(title);
+                title = r[0];
+                artist = r[1];
+            }
+            titleEl.textContent = title.toUpperCase();
+        }
+        if (artist) authorEl.textContent = artist;
+        if (meta.cover) {
+            artworkUrl = meta.cover;
+            if (meta.color) bookColorCache[file.name] = meta.color;
+            img.onload = function() {
+                img.style.filter = 'blur(0px)';
+                img.style.transform = 'scale(1) translateY(0)';
+                if (bookColorCache[file.name]) {
+                    setThemeColor(bookColorCache[file.name], false);
+                    return;
+                }
+                try {
+                    const hex = dominantColorHex(img);
+                    setThemeColor(hex, false);
+                    bookColorCache[file.name] = hex;
+                    updateBookMeta(file, { color: hex });
+                } catch (e) { console.error("Error en Chameleon Unificado:", e); }
+            };
+            img.src = artworkUrl;
+            if (miniThumb) miniThumb.src = artworkUrl;
+            document.getElementById('cover-container').style.display = 'block';
+        } else {
+            artworkUrl = generateRandomWaves();
+            img.src = artworkUrl;
+            if (miniThumb) miniThumb.src = artworkUrl;
+            document.getElementById('cover-container').style.display = 'block';
+        }
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: titleEl.textContent,
+                artist: authorEl.textContent,
+                album: 'Audiolibro',
+                artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/png' }] : []
+            });
+        }
+    }
+
+    function processAudioFile(file) {
         const ui = document.getElementById('player-ui-container');
         const coverArt = document.getElementById('cover-art');
         
@@ -1683,129 +1842,10 @@
             const miniThumb = document.getElementById('mini-player-thumb');
             if(miniThumb) miniThumb.src = '';
 
-            try {
-                window.jsmediatags.read(file, {
-                    onSuccess: function(tag) {
-                        let { title, artist, picture } = (tag && tag.tags) || {};
-                        let artworkUrl = '';
-                        
-                        if (title) {
-                            title = title.replace(/\.[^/.]+$/, "");
-                            if (title.includes("-") && (!artist || artist === "Autor Desconocido")) {
-                                const r = splitAT(title);
-                                title = r[0];
-                                artist = r[1];
-                            }
-                            titleEl.textContent = title.toUpperCase();
-                        }
-                        
-                        if (artist) document.getElementById('author').textContent = artist;                        if (picture) {
-                            const { data, format } = picture;
-                            let base64String = "";
-                            for (let i = 0; i < data.length; i++) base64String += String.fromCharCode(data[i]);
-                            artworkUrl = "data:" + format + ";base64," + window.btoa(base64String);                            const img = document.getElementById('cover-art');
-                            img.src = artworkUrl;
-                            const miniThumb = document.getElementById('mini-player-thumb');
-                            if(miniThumb) miniThumb.src = artworkUrl;
-                            document.getElementById('cover-container').style.display = 'block';                            // Efecto Camaleón Unificado: Muestreo de color dominante real
-                            img.onload = function() {
-                                // Restauramos la nitidez de la nueva carátula
-                                img.style.filter = 'blur(0px)';
-                                img.style.transform = 'scale(1) translateY(0)';
-                                // Si el color ya fue calculado (por el status-dot en la biblioteca),
-                                // lo reutilizamos directamente sin recalcular el canvas.
-                                if (currentFileName && bookColorCache[currentFileName]) {
-                                    setThemeColor(bookColorCache[currentFileName], false);
-                                    return;
-                                }
-                                try {
-                                    const canvas = document.createElement('canvas');
-                                    const ctx = canvas.getContext('2d');
-                                    canvas.width = 50; canvas.height = 50;
-                                    ctx.drawImage(img, 0, 0, 50, 50);
-                                    const data = ctx.getImageData(0, 0, 50, 50).data;
-                                    let counts = {}, maxCount = 0;
-                                    let domR = 0, domG = 0, domB = 0;
-                                    for (let i = 0; i < data.length; i += 16) {
-                                        if (data[i+3] < 128) continue;
-                                        let cR = Math.round(data[i]/16)*16, cG = Math.round(data[i+1]/16)*16, cB = Math.round(data[i+2]/16)*16;
-                                        // Ignorar grises desaturados para evitar un UI aburrido (buscamos un tema vibrante)
-                                        if (Math.abs(cR-cG)<20 && Math.abs(cG-cB)<20 && Math.abs(cR-cB)<20) continue;
-                                        let key = cR+','+cG+','+cB;
-                                        counts[key] = (counts[key] || 0) + 1;
-                                        if (counts[key] > maxCount) {
-                                            maxCount = counts[key];
-                                            domR = data[i]; domG = data[i+1]; domB = data[i+2];
-                                        }
-                                    }
-                                    if(maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
-                                    
-                                    let r = domR/255, g = domG/255, b = domB/255;
-                                    let max = Math.max(r, g, b), min = Math.min(r, g, b);
-                                    let h, s, l = (max + min) / 2;
-                                    if (max === min) h = s = 0; 
-                                    else {
-                                        let diff = max - min;
-                                        s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
-                                        if (max === r) h = (g - b) / diff + (g < b ? 6 : 0);
-                                        else if (max === g) h = (b - r) / diff + 2;
-                                        else h = (r - g) / diff + 4;
-                                        h /= 6;
-                                    }                                    // Normalización Progresiva: Optimiza el rango de color para que los cambios sean vibrantes y fluidos
-                                    // Al ajustar H, S y L de forma dinámica, la transición entre libros es mucho más rica visualmente
-                                    let finalH = isNaN(h) ? 0.58 : h;
-                                    let finalS = isNaN(s) ? 0.85 : Math.min(Math.max(s, 0.75), 0.9); // Saturación más alta para colores vivos
-                                    let finalL = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65); // Brillo equilibrado
-
-                                    const hslToHex = (h, s, l) => {
-                                        const f = (p, q, t) => {
-                                            if (t < 0) t += 1; if (t > 1) t -= 1;
-                                            if (t < 1/6) return p + (q - p) * 6 * t;
-                                            if (t < 1/2) return q;
-                                            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                                            return p;
-                                        };
-                                        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                                        const p = 2 * l - q;
-                                        const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0');
-                                        return `#${toHex(f(p,q,h+1/3))}${toHex(f(p,q,h))}${toHex(f(p,q,h-1/3))}`;
-                                    };                                    setThemeColor(hslToHex(finalH, finalS, finalL), false);
-                                    // Guardar en caché para el próximo clic en este libro
-                                    if (currentFileName) bookColorCache[currentFileName] = hslToHex(finalH, finalS, finalL);
-                                } catch (e) { console.error("Error en Chameleon Unificado:", e); }
-                            };                        } else {
-                            artworkUrl = generateRandomWaves();
-                            const img = document.getElementById('cover-art');
-                            img.src = artworkUrl;
-                            const miniThumb = document.getElementById('mini-player-thumb');
-                            if(miniThumb) miniThumb.src = artworkUrl;
-                            document.getElementById('cover-container').style.display = 'block';
-                        }
-
-                        // Integración con Media Session API (Controles de sistema)
-                        if ('mediaSession' in navigator) {
-                            navigator.mediaSession.metadata = new MediaMetadata({
-                                title: titleEl.textContent,
-                                artist: document.getElementById('author').textContent,
-                                album: 'Audiolibro',
-                                artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/png' }] : []
-                            });
-                        }
-                    },                    onError: () => { 
-                        document.getElementById('author').textContent = "Reproductor Local";
-                        const miniAuthor = document.getElementById('mini-author');
-                        if(miniAuthor) miniAuthor.textContent = "Reproductor Local";
-                        
-                        const waveUrl = generateRandomWaves();
-                        const img = document.getElementById('cover-art');
-                        img.src = waveUrl;
-                        const miniThumb = document.getElementById('mini-player-thumb');
-                        if(miniThumb) miniThumb.src = waveUrl;
-                        
-                        document.getElementById('cover-container').style.display = 'block';
-                    }
-                });
-            } catch (e) {}            if (window.currentAudioURL) {
+            getBookMeta(file).then(meta => {
+                if (currentFileName !== file.name) return;
+                applyPlayerMeta(meta, file);
+            }).catch(() => applyPlayerMeta({ ok: false }, file));            if (window.currentAudioURL) {
                 URL.revokeObjectURL(window.currentAudioURL);
             }
             window.currentAudioURL = URL.createObjectURL(file);
@@ -2300,6 +2340,11 @@
             if(box) box.innerHTML = '<div style="padding:15px; color:#666; text-align:center; font-size:0.85rem;">Solo archivos M4B/M4A soportan esta tabla.</div>';
             return;
         }
+        // Capítulos ya analizados: se leen de la caché sin tocar el archivo
+        try {
+            const cm = await getBookMeta(file);
+            if (cm && Array.isArray(cm.chapters)) { showChaptersResult(cm.chapters); return; }
+        } catch (e) {}
         try {
             const mp4box = MP4Box.createFile();
             const buffer = await file.arrayBuffer();
@@ -2359,12 +2404,8 @@
                     }
                 }
 
-                if (parsedList.length > 0) {
-                    renderChaptersUI(parsedList);
-                } else {
-                    if(chapStatus) chapStatus.innerText = 'Sin capítulos';
-                    if(box) box.innerHTML = '<div style="padding:15px; color:#666; text-align:center; font-size:0.85rem;">No se encontraron marcas de capítulos internas.</div>';
-                }
+                updateBookMeta(file, { chapters: parsedList });
+                showChaptersResult(parsedList);
             };
             mp4box.appendBuffer(buffer);
             mp4box.flush();
@@ -2372,6 +2413,17 @@
             console.warn("Error analizando cabeceras:", err);
             if(chapStatus) chapStatus.innerText = 'Error de lectura';
             if(box) box.innerHTML = '<div style="padding:15px; color:#ff4757; text-align:center; font-size:0.85rem;">El archivo es demasiado pesado o ilegible.</div>';
+        }
+    }
+
+    function showChaptersResult(list) {
+        const chapStatus = document.getElementById('chapters-status-title');
+        const box = document.getElementById('chapters-list-box');
+        if (list.length > 0) {
+            renderChaptersUI(list);
+        } else {
+            if (chapStatus) chapStatus.innerText = 'Sin capítulos';
+            if (box) box.innerHTML = '<div style="padding:15px; color:#666; text-align:center; font-size:0.85rem;">No se encontraron marcas de capítulos internas.</div>';
         }
     }
 
@@ -2606,8 +2658,7 @@
         });
         storeItems = all;
         applyMeta();
-        let msg = errs.join(" · ");
-        if (noCat && !errs.length) msg = noCat === storeList.length ? "Sin catalog.json: las portadas se buscan una a una. Genera el catálogo (icono de enlace)." : noCat + " tienda(s) sin catalog.json (icono de enlace para generarlo).";
+        const msg = errs.join(" · ");
         status.textContent = msg;
         renderChips(); renderStore();
     }
@@ -2649,13 +2700,79 @@
     const cmpEs = (x, y) => x.localeCompare(y, 'es', { sensitivity: 'base', numeric: true });
     const coverUrl = it => 'url(' + (it.cover || generateRandomWaves()) + ')';
 
+    // Color dominante de la portada (mismo cálculo que la biblioteca)
+    function coverColorOf(src) {
+        return new Promise(res => {
+            const img = new Image();
+            if (!src.startsWith('data:')) img.crossOrigin = 'anonymous';
+            img.onerror = () => res(null);
+            img.onload = () => {
+                try {
+                    const cv = document.createElement('canvas'); cv.width = cv.height = 50;
+                    const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, 50, 50);
+                    const data = cx.getImageData(0, 0, 50, 50).data;
+                    const counts = {}; let maxCount = 0, domR = 0, domG = 0, domB = 0;
+                    for (let i = 0; i < data.length; i += 16) {
+                        if (data[i + 3] < 128) continue;
+                        const cR = Math.round(data[i] / 16) * 16, cG = Math.round(data[i + 1] / 16) * 16, cB = Math.round(data[i + 2] / 16) * 16;
+                        if (Math.abs(cR - cG) < 20 && Math.abs(cG - cB) < 20 && Math.abs(cR - cB) < 20) continue;
+                        const k = cR + ',' + cG + ',' + cB;
+                        counts[k] = (counts[k] || 0) + 1;
+                        if (counts[k] > maxCount) { maxCount = counts[k]; domR = data[i]; domG = data[i + 1]; domB = data[i + 2]; }
+                    }
+                    if (maxCount === 0) { domR = Math.random() * 255; domG = Math.random() * 255; domB = Math.random() * 255; }
+                    const r = domR / 255, g = domG / 255, b = domB / 255;
+                    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+                    let h, sa, l = (mx + mn) / 2;
+                    if (mx === mn) h = sa = 0;
+                    else {
+                        const df = mx - mn;
+                        sa = l > 0.5 ? df / (2 - mx - mn) : df / (mx + mn);
+                        if (mx === r) h = (g - b) / df + (g < b ? 6 : 0); else if (mx === g) h = (b - r) / df + 2; else h = (r - g) / df + 4;
+                        h /= 6;
+                    }
+                    const fh = isNaN(h) ? 0.58 : h, fs = isNaN(sa) ? 0.85 : Math.min(Math.max(sa, 0.75), 0.9), fl = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65);
+                    const f = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
+                    const q = fl < 0.5 ? fl * (1 + fs) : fl + fs - fl * fs, p = 2 * fl - q;
+                    const hx = x => Math.round(f(p, q, x) * 255).toString(16).padStart(2, '0');
+                    res('#' + hx(fh + 1 / 3) + hx(fh) + hx(fh - 1 / 3));
+                } catch (e) { res(null); }
+            };
+            img.src = src;
+        });
+    }
+    function ensureColor(it) {
+        if (!it.cover) return Promise.resolve(null);
+        if (!it._cp || it._cpSrc !== it.cover) { it._cpSrc = it.cover; it._cp = coverColorOf(it.cover).then(c => { it.color = c; return c; }); }
+        return it._cp;
+    }
+    // aplica el color de la portada solo a ese elemento (tarjeta u hoja de detalle), no al tema global
+    function paintColor(it, el, reset) {
+        const set = c => { el.style.setProperty('--color-principal', c); el.style.setProperty('--color-principal-rgb', hexToRgb(c)); };
+        if (reset) { el.style.removeProperty('--color-principal'); el.style.removeProperty('--color-principal-rgb'); }
+        if (it.color && it._cpSrc === it.cover) { set(it.color); return; }
+        ensureColor(it).then(c => { if (c && it._cpSrc === it.cover && (!el._it || el._it === it)) set(c); });
+    }
+
+    // misma etiqueta que la biblioteca: mayúsculas, autor en color principal y marquesina si no cabe
+    function stLine(txt, author) {
+        const c = document.createElement('div'), sp = document.createElement('span');
+        c.className = 'marquee-container'; sp.className = 'marquee-text';
+        if (txt.length > 16) { c.classList.add('active-scroll'); sp.textContent = (txt + '\u00a0'.repeat(10)).repeat(2); }
+        else sp.textContent = txt;
+        if (author) { c.style.color = 'var(--color-principal)'; c.style.opacity = '0.8'; }
+        c.appendChild(sp); return c;
+    }
     function mkCard(it, obs) {
-        const d = document.createElement('div'); d.className = 'st-card';
-        d.innerHTML = '<div class="st-cover"></div><div class="st-t"></div><small></small>';
-        d.firstChild.style.backgroundImage = coverUrl(it);
-        if (storeOwnedSet.includes(it.f.name)) d.firstChild.innerHTML = '<i class="material-icons st-own">check</i>';
-        d.children[1].textContent = it.title; d.children[2].textContent = it.author;
+        const d = document.createElement('div'); d.className = 'book-card';
+        d.innerHTML = '<div class="book-thumb"></div><div class="book-label"></div>';
+        const th = d.firstChild, lb = d.lastChild;
+        th.style.backgroundImage = coverUrl(it);
+        if (storeOwnedSet.includes(it.f.name)) th.innerHTML = '<i class="material-icons st-own">check</i>';
+        lb.appendChild(stLine((it.title || '').toUpperCase(), false));
+        lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
+        if (it.cover) paintColor(it, d);
         if (!it.cover && !it.tried) { d._it = it; obs.observe(d); }
         return d;
     }
@@ -2663,7 +2780,7 @@
         const it = d._it; it.tried = true;
         const [u, ch] = await withSlot(() => Promise.all([getStoreCover(it), getStoreChapters(it)]));
         it.chapters = ch;
-        if (u) { it.cover = u; d.firstChild.style.backgroundImage = coverUrl(it); }
+        if (u) { it.cover = u; d.firstChild.style.backgroundImage = coverUrl(it); paintColor(it, d); }
     }
 
     // ── Agrupación automática ─────────────────────────────────────────
@@ -3033,6 +3150,7 @@
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(it.f.name);
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
+        sh._it = it; paintColor(it, sh, true);
         const infoEl = sh.querySelector('.st-di');
         const resetBtn = () => { b.style.background = ''; b.style.color = ''; };
         const setBtn = (t, pct, retry) => {
@@ -3083,6 +3201,7 @@
         c.querySelector('.dl-g').style.backgroundImage = d.cu;
         c.querySelector('.dl-c').style.backgroundImage = d.cu;
         c.querySelector('.dl-t').textContent = d.title; c.querySelector('.dl-a').textContent = d.author;
+        if (d.color) { c.style.setProperty('--color-principal', d.color); c.style.setProperty('--color-principal-rgb', hexToRgb(d.color)); }
         d.el = c; dlPaint(d);
         return c;
     }
@@ -3093,7 +3212,7 @@
     }
     function dlAdd(it) {
         const list = document.getElementById('library-list'); if (!list) return;
-        const d = { name: it.f.name, title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), pct: 0, el: null };
+        const d = { name: it.f.name, title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), color: it.color || null, pct: 0, el: null };
         storeDl.set(d.name, d);
         list.querySelectorAll('[data-dl]').forEach(x => { if (x.dataset.dl === d.name) x.remove(); });
         const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
