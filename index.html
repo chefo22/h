@@ -1624,6 +1624,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 
                 const bookData = { 
                     name: file.name, 
+                    origName: file._storeOrig || file.name,
                     data: file, 
                     added: new Date().getTime(),
                     metaTitle: meta.title || null,
@@ -2853,8 +2854,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 dbPut("settings", { key, value: { stamp, data: catalog } }).catch(() => {});
             }
         }
+        const nameCount = {}; files.forEach(f => { nameCount[f.name] = (nameCount[f.name] || 0) + 1; });
         const items = files.map(f => {
-            const m = parseStoreName(f.name), c = catalog[f.name] || {};
+            // el catálogo se busca por nombre+tamaño; por solo nombre únicamente si no hay otro archivo con ese nombre
+            const m = parseStoreName(f.name), c = catalog[f.name + '|' + (f.size || 0)] || (nameCount[f.name] === 1 ? catalog[f.name] : null) || {};
             let t0 = c.t || m.title, ser = m.ser, idx = m.idx; const saga = m.saga; let note = m.note;
             const pn = parseNum(t0); if (pn) { t0 = pn.rest; if (ser == null) { ser = pn.ser; idx = pn.idx; } }
             if (saga && t0.toLowerCase().startsWith(saga.toLowerCase() + ' - ')) t0 = t0.slice(saga.length + 3).trim();
@@ -2892,7 +2895,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             const keys = [];
             db.transaction(["books"], "readonly").objectStore("books").openCursor().onsuccess = ev => {
                 const c = ev.target.result;
-                if (c) { keys.push(c.key); c.continue(); } else res(keys);
+                if (c) { const v = c.value; keys.push((v.origName || v.name) + '|' + ((v.data && v.data.size) || 0)); c.continue(); } else res(keys);
             };
         });
     }
@@ -2923,7 +2926,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // título/autor mostrados = corrección manual > intercambio global > valor original
     function applyMeta() {
         storeItems.forEach(it => {
-            const o = storeMeta[it.f.name];
+            const o = storeMeta[ik(it)] || storeMeta[it.f.name];
             if (o) { it.title = o.t; it.author = o.a; }
             else { it.title = it.t0; it.author = it.a0; }
         });
@@ -2947,7 +2950,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         return { title: u.t, note: u.note, author, ser: null, idx: null, saga: null };
     }
     const cmpEs = (x, y) => x.localeCompare(y, 'es', { sensitivity: 'base', numeric: true });
-    const coverUrl = it => 'url(' + (it.cover || generateRandomWaves()) + ')';
+    // Identidad de un libro de la tienda: nombre + tamaño. Mismo nombre con distinto tamaño = libros distintos.
+    const ik = it => it.f.name + '|' + (it.f.size || 0);
+    const coverUrl = it => it.cover ? 'url(' + it.cover + ')' : 'none';
 
     // Color dominante de la portada (mismo cálculo que la biblioteca)
     function coverColorOf(src) {
@@ -3022,7 +3027,11 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const old = [...th.querySelectorAll('.st-img')].filter(x => x !== im);
         if (old.length) setTimeout(() => old.forEach(x => x.remove()), 700);
     }
-    const itemImg = it => it.cover ? 'url(' + it.cover + ')' : (it._waves = it._waves || 'url(' + generateRandomWaves() + ')');
+    // sin portada incrustada: icono neutro (nada inventado ni sacado de internet)
+    function paintCardImg(th, it) {
+        if (it.cover) { setCardImg(th, 'url(' + it.cover + ')'); return; }
+        if (!th.querySelector('.st-ph')) th.insertAdjacentHTML('afterbegin', '<i class="material-icons st-ph" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.5rem;opacity:.18">headset</i>');
+    }
     function mkCard(it, obs) {
         const d = document.createElement('div'); d.className = 'book-card';
         d.innerHTML = '<div class="book-thumb"></div><div class="book-label"></div>';
@@ -3031,8 +3040,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         // un mismo libro puede estar en varias filas (saga, autor, editorial…): todas sus tarjetas se registran
         // y se rellenan a la vez cuando llega la portada
         (it._cards = it._cards || new Set()).add(d);
-        if (it.cover || it._done) setCardImg(th, itemImg(it));
-        if (storeOwnedSet.includes(it.f.name)) th.insertAdjacentHTML('beforeend', '<i class="material-icons st-own">check</i>');
+        if (it.cover || it._done) paintCardImg(th, it);
+        if (storeOwnedSet.includes(ik(it))) th.insertAdjacentHTML('beforeend', '<i class="material-icons st-own">check</i>');
         lb.appendChild(stLine((it.title || '').toUpperCase(), false));
         lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
@@ -3059,7 +3068,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         (it._cards || []).forEach(c => {
             if (!c.isConnected) return;
             if (u) paintColor(it, c);
-            setCardImg(c.firstChild, itemImg(it));
+            paintCardImg(c.firstChild, it);
             if (c._obs) c._obs.unobserve(c);
         });
     }
@@ -3092,7 +3101,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     };
     function storeGroups(items) {
         const sagas = [], seen = new Set();
-        const sigOf = list => list.map(i => i.f.name).sort().join('|');
+        const sigOf = list => list.map(ik).sort().join('|');
         const addTo = (arr, name, list) => {
             const sig = sigOf(list);
             if (seen.has(sig)) return; seen.add(sig); arr.push({ name, list });
@@ -3121,7 +3130,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             .filter(l => l.length >= 3 && new Set(l.map(i => verKey(i.title))).size >= 2)
             .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(sagas, commonName(l), l));
         // 2) mismo título (otras traducciones, voces, ediciones), salvo que ya esté dentro de una saga
-        const inSaga = list => sagas.some(g => { const s = new Set(g.list.map(i => i.f.name)); return list.every(i => s.has(i.f.name)); });
+        const inSaga = list => sagas.some(g => { const s = new Set(g.list.map(ik)); return list.every(i => s.has(ik(i))); });
         const vers = [];
         bucket(items, i => verKey(i.title)).filter(l => l.length >= 2 && sigW(l[0].title).join('').length >= 3)
             .filter(l => !inSaga(l))
@@ -3232,9 +3241,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
         const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx));
         const rest = ranked.filter(x => !x.r);
-        hits.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder), false, [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'], x.g.color); });
-        rest.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder), false, x.g.tag, x.g.color); });
-        row('Más audiolibros', items.filter(i => !used.has(i.f.name)).sort(byTitle));
+        hits.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'], x.g.color); });
+        rest.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, x.g.tag, x.g.color); });
+        row('Más audiolibros', items.filter(i => !used.has(ik(i))).sort(byTitle));
     }
 
     function megaBlob(node) {
@@ -3380,7 +3389,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // Una sola descarga parcial por libro: de ahí salen la portada y los capítulos
     const storeAnalysis = {};
     function analyzeOnce(it, force) {
-        const k = it.f.name;
+        const k = ik(it);
         if (force) delete storeAnalysis[k];
         if (!storeAnalysis[k]) storeAnalysis[k] = analyzeNode(it).catch(e => { delete storeAnalysis[k]; throw e; });
         return storeAnalysis[k];
@@ -3388,7 +3397,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 
     async function analyzeNode(it) {
         const rec = await localBookRecord(it.f.name);
-        const node = rec && rec.data ? localNode(rec.data) : it.f;
+        const node = rec && rec.data && rec.data.size === it.f.size ? localNode(rec.data) : it.f;
         const D = m => { storeDiag[it.f.name] = m; console.log("[tienda] " + it.f.name + ": " + m); };
         const total = node.size || 0;
         // 1) solo se baja una cabecera pequeña (512 KB). Después se pide por rango SOLO lo necesario:
@@ -3479,30 +3488,21 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
 
     async function getStoreCover(it, force) {
-        // 0) si ya tienes el libro en tu biblioteca, usa su portada
-        const local = await localBookCover(it.f.name);
-        if (local) { storeDiag[it.f.name] = "portada de tu biblioteca"; return local; }
-        const key = "storeCover4:" + it.f.name;
+        // 0) si ya tienes ESE archivo en tu biblioteca (mismo nombre y tamaño), usa su portada
+        const lrec = await localBookRecord(it.f.name);
+        if (lrec && lrec.data && lrec.data.size === it.f.size && lrec.metaCover) { storeDiag[it.f.name] = "portada de tu biblioteca"; return lrec.metaCover; }
+        const key = "storeCover5:" + ik(it);
         if (!force) { try { const c = await dbGet("settings", key); if (c && c.value) return c.value === "none" ? null : c.value; } catch (e) {} }
-        let val = null, offline = false, transient = false;
-        if (USE_EMBEDDED_COVER) {
-            try { val = (await analyzeOnce(it, force)).cover; }
-            catch (e) { transient = true; storeDiag[it.f.name] = "error: " + (e && e.message || e); console.warn("Portada incrustada:", e); }
-        }
-        if (!val) {
-            try {
-                const img = (it.covers || {})[it.f.name.replace(/\.[^/.]+$/, "").toLowerCase()];
-                if (img) val = await blobToDataURL(await megaBlob(img));
-            } catch (e) { console.warn("Imagen MEGA:", e); }
-        }
-        if (!val) { const r = await internetCover(it); if (r === undefined) offline = true; else val = r; }
-        if (!val && (offline || transient)) return null;
+        // 1) portada incrustada en el propio archivo (única fuente; no se busca nada en internet ni en carpetas)
+        let val = null;
+        try { val = (await analyzeOnce(it, force)).cover; }
+        catch (e) { storeDiag[it.f.name] = "error: " + (e && e.message || e); console.warn("Portada incrustada:", e); return null; }
         dbPut("settings", { key, value: val || "none" }).catch(() => {});
         return val;
     }
 
     async function getStoreChapters(it, force) {
-        const key = "storeChap1:" + it.f.name;
+        const key = "storeChap2:" + ik(it);
         if (!force) { try { const c = await dbGet("settings", key); if (c && c.value) return c.value; } catch (e) {} }
         try {
             const a = await analyzeOnce(it, false);
@@ -3531,7 +3531,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
         const sn = storeList.length > 1 ? ((storeList.find(x => x.id === it.sid) || {}).name || '') : '';
         sh.querySelector('.st-di').textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx : '', publisherName(it.note), mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
-        const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(it.f.name);
+        const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(ik(it));
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
         sh._it = it; paintColor(it, sh, true);
@@ -3557,14 +3557,14 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         document.getElementById('st-esv').onclick = async () => {
             const t = et.value.trim(), a = ea.value.trim();
             if (!t) return;
-            storeMeta[it.f.name] = { t, a: a || 'Sin autor' };
+            storeMeta[ik(it)] = { t, a: a || 'Sin autor' };
             await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
             it.title = t; it.author = a || 'Sin autor';
             sh.querySelector('.st-dt').textContent = it.title; sh.querySelector('.st-da').textContent = it.author;
             box.style.display = 'none'; renderStore();
         };
         document.getElementById('st-ers').onclick = async () => {
-            delete storeMeta[it.f.name];
+            delete storeMeta[ik(it)]; delete storeMeta[it.f.name];
             await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
             applyMeta();
             et.value = it.title; ea.value = it.author === 'Sin autor' ? '' : it.author;
@@ -3596,7 +3596,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
     function dlAdd(it) {
         const list = document.getElementById('library-list'); if (!list) return;
-        const d = { name: it.f.name, title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), color: it.color || null, pct: 0, el: null };
+        const d = { name: ik(it), title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), color: it.color || null, pct: 0, el: null };
         storeDl.set(d.name, d);
         list.querySelectorAll('[data-dl]').forEach(x => { if (x.dataset.dl === d.name) x.remove(); });
         const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
@@ -3616,10 +3616,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const mb = n => (n / 1048576).toFixed(n >= 1e8 ? 0 : 1);
         const show = () => {
             const n = Math.max(loaded, bytes);
-            if (total) { const pct = Math.min(100, Math.round(n / total * 100)); ui(pct + '% · ' + mb(n) + ' / ' + mb(total) + ' MB', pct); dlSet(f.name, pct); }
+            if (total) { const pct = Math.min(100, Math.round(n / total * 100)); ui(pct + '% · ' + mb(n) + ' / ' + mb(total) + ' MB', pct); dlSet(ik(it), pct); }
             else ui(mb(n) + ' MB descargados', 0);
         };
-        const fail = m => { finished = true; clearInterval(wd); dlRemove(f.name); info(''); ui('Error: ' + m + ' · TOCA PARA REINTENTAR', null, true); };
+        const fail = m => { finished = true; clearInterval(wd); dlRemove(ik(it)); info(''); ui('Error: ' + m + ' · TOCA PARA REINTENTAR', null, true); };
         ui('Conectando con MEGA…', 0); info(''); dlAdd(it);
         const wd = setInterval(() => {
             if (finished) return;
@@ -3636,11 +3636,18 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             ui('Guardando en tu biblioteca…', 100);
             try {
                 const ext = f.name.split('.').pop().toLowerCase();
-                const file = new File(chunks, f.name, { type: MIME[ext] || 'audio/mpeg' });
+                let fname = f.name;
+                const ex = await localBookRecord(fname);
+                if (ex && ex.data && ex.data.size !== total) {   // mismo nombre pero otro archivo: no se pisa, se guarda aparte
+                    const dot = fname.lastIndexOf('.'), base = dot > 0 ? fname.slice(0, dot) : fname, sfx = dot > 0 ? fname.slice(dot) : '';
+                    for (let n = 2; n < 50; n++) { fname = base + ' (' + n + ')' + sfx; const r2 = await localBookRecord(fname); if (!r2) break; }
+                }
+                const file = new File(chunks, fname, { type: MIME[ext] || 'audio/mpeg' });
+                file._storeOrig = f.name;
                 let cv = it.cover;
                 if (cv && !cv.startsWith("data:")) { try { cv = await blobToDataURL(await (await fetch(cv)).blob()); } catch (e) {} }
                 file._storeCover = cv;
-                dlRemove(f.name);
+                dlRemove(ik(it));
                 file._storeTitle = it.title; file._storeAuthor = it.author === 'Sin autor' ? '' : it.author;
                 saveToLibrary(file);
                 ui("EN TU BIBLIOTECA ✓", 100);
@@ -3671,8 +3678,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             st.textContent = "Catálogo " + (i + 1) + "/" + list.length + ": " + it.title;
             try {
                 const a = await analyzeOnce(it, true);
-                out[it.f.name] = { t: a.title || it.title, a: a.artist || it.author, cv: a.cover ? await shrinkCover(a.cover, 320) : null, ch: a.chapters };
-            } catch (e) { out[it.f.name] = { t: it.title, a: it.author, cv: null, ch: null }; }
+                out[ik(it)] = { t: a.title || it.title, a: a.artist || it.author, cv: a.cover ? await shrinkCover(a.cover, 320) : null, ch: a.chapters };
+            } catch (e) { out[ik(it)] = { t: it.title, a: it.author, cv: null, ch: null }; }
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
