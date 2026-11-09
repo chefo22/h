@@ -698,7 +698,7 @@
             <button onclick="toggleSettings()" style="width:100%; background:var(--color-principal); color:white; border:none; padding: 16px; border-radius: 18px; font-size: 1rem; font-weight:600; box-shadow: 0 10px 20px rgba(var(--color-principal-rgb),0.2);">Guardar Cambios</button>
         </div>
     </div>    <div id="library-container" style="margin-bottom: 10px; text-align: center; position: relative;">
-        <h3 ondblclick="setThemeColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'))" style="font-size: 0.65rem; margin: 0 0 10px 0; color: var(--color-principal); display: flex; justify-content: center; align-items: center; letter-spacing: 4px; opacity: 0.6; font-weight: 900; text-indent: 4px; cursor: pointer; user-select: none;">
+        <h3 id="lib-title" oncontextmenu="return false" ondblclick="setThemeColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'))" style="font-size: 0.65rem; margin: 0 0 10px 0; color: var(--color-principal); display: flex; justify-content: center; align-items: center; letter-spacing: 4px; opacity: 0.6; font-weight: 900; text-indent: 4px; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;">
             BIBLIOTECA
         </h3>        <div class="st-top">
             <i class="material-icons st-ic" style="color:var(--color-principal)" onclick="importFromDevice()">add_circle_outline</i>
@@ -726,6 +726,21 @@
         </div>
     </div>
 
+    <script>
+    // Mantener pulsado "BIBLIOTECA" muestra/oculta los botones (añadir, buscar, refrescar, enlace)
+    (function () {
+        const t = document.getElementById('lib-title'), bar = document.querySelector('.st-top');
+        if (!t || !bar) return;
+        let timer = null, x0 = 0, y0 = 0;
+        const stop = () => { clearTimeout(timer); timer = null; };
+        t.addEventListener('pointerdown', e => {
+            x0 = e.clientX; y0 = e.clientY; stop();
+            timer = setTimeout(() => { timer = null; bar.classList.toggle('show'); if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {} }, 600);
+        });
+        t.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => t.addEventListener(ev, stop));
+    })();
+    </script>
     <audio id="audio-player"></audio>
     <style>
 @property --fb{syntax:'<length>';inherits:false;initial-value:0px}
@@ -740,11 +755,11 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
 .player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
 .player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status,.player-active #st-chips{display:none!important}
-.st-top{display:flex;justify-content:center;gap:22px;padding:0 0 6px}
+.st-top{display:none;justify-content:center;gap:22px;padding:0 0 6px}
+.st-top.show{display:flex}
 .st-ic{color:#bbb;font-size:22px;cursor:pointer}
 #st-cfg{display:none;gap:8px;padding:4px 4px 8px;flex-wrap:wrap}
 #st-cfg input,#st-q{flex:1;min-width:0;background:#1c1c1c;border:1px solid #333;color:#eee;border-radius:10px;padding:10px 12px;font-size:.85rem}
-#st-edit input{background:#1c1c1c;border:1px solid #333;color:#eee;border-radius:10px;padding:10px 12px;font-size:.85rem;width:100%;box-sizing:border-box}
 #st-q{display:none;margin:0 0 8px;width:100%;box-sizing:border-box}
 .st-btn{background:var(--color-principal);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:.85rem}
 .st-btn:disabled{background:#2a2a2a;color:#888}
@@ -814,16 +829,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             <div class="st-ht st-dt" style="margin-top:10px"></div>
             <div class="st-ha st-da"></div>
             <div class="st-ha st-di" style="margin-bottom:8px"></div>
-            <div id="st-edit" style="display:none;width:100%;flex-direction:column;gap:8px;margin-bottom:8px">
-                <input id="st-et" placeholder="Título">
-                <input id="st-ea" placeholder="Autor">
-                <div style="display:flex;gap:8px">
-                    <button class="st-btn" id="st-esw" style="flex:1;background:#2a2a2a">⇄ INTERCAMBIAR</button>
-                    <button class="st-btn" id="st-ers" style="flex:1;background:#2a2a2a">RESTAURAR</button>
-                </div>
-                <button class="st-btn" id="st-esv" style="width:100%">GUARDAR</button>
-            </div>
-            <button class="st-btn" id="st-ed" style="width:100%;background:#2a2a2a;margin-bottom:4px">✎ EDITAR TÍTULO Y AUTOR</button>
             <button class="st-btn" id="st-dl" style="width:100%;padding:14px">DESCARGAR</button>
         </div>
     </div>
@@ -2879,7 +2884,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         }
         if (!window.mega) { status.textContent = "No se pudo cargar megajs (revisa tu conexión)."; return; }
         status.textContent = "Cargando " + (storeList.length > 1 ? storeList.length + " tiendas" : "tienda") + "...";
-        try { const e = await dbGet("settings", "storeMeta"); storeMeta = (e && e.value) || {}; } catch (e) { storeMeta = {}; }
         const res = await Promise.allSettled(storeList.map(loadOneStore));
         const all = [], errs = []; let noCat = 0;
         res.forEach((r, i) => {
@@ -2903,7 +2907,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
     }
 
-    let storeSheetIt = null, storeSwap = true, storeOwnedSet = [], storeMeta = {}, storeSwapAll = false;
+    let storeSheetIt = null, storeSwap = true, storeOwnedSet = [], storeSwapAll = false;
     // nombre de archivo -> [título, autor]; convención: "Autor - Título"
     // separa la nota final entre paréntesis (traductor, narrador, edición…): "Título (nota)" → { t: "Título", note: "nota" }
     // Códigos de editorial que van entre paréntesis al final del nombre, p. ej. "(PLT)". Añade aquí los que uses.
@@ -2926,13 +2930,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const m = /^\s*(\d+)\.(\d+)\s*[-–.:]?\s*(.+)$/.exec(t || "");
         return m ? { ser: +m[1], idx: +m[2], rest: m[3].trim() } : null;
     }
-    // título/autor mostrados = corrección manual > intercambio global > valor original
+    // título/autor mostrados = valor original
     function applyMeta() {
-        storeItems.forEach(it => {
-            const o = storeMeta[ik(it)] || storeMeta[it.f.name];
-            if (o) { it.title = o.t; it.author = o.a; }
-            else { it.title = it.t0; it.author = it.a0; }
-        });
+        storeItems.forEach(it => { it.title = it.t0; it.author = it.a0; });
     }
     function parseStoreName(name) {
         const clean = name.replace(/\.[^/.]+$/, "").replace(/_/g, " ").trim();
@@ -3526,28 +3526,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         resetBtn();
         if (it._dl && !has) { b.disabled = true; b.textContent = it._dl.t; if (it._dl.pct != null) { b.style.background = 'linear-gradient(90deg,var(--color-principal) ' + it._dl.pct + '%,#2a2a2a ' + it._dl.pct + '%)'; b.style.color = '#fff'; } }
         b.onclick = () => { b.disabled = true; storeGet(it, setBtn, setInfo); };
-        // edición manual de metadatos (se guarda en este navegador, por nombre de archivo)
-        const box = document.getElementById('st-edit'), et = document.getElementById('st-et'), ea = document.getElementById('st-ea');
-        box.style.display = 'none'; et.value = it.title; ea.value = it.author === 'Sin autor' ? '' : it.author;
-        document.getElementById('st-ed').onclick = () => { box.style.display = box.style.display === 'none' ? 'flex' : 'none'; };
-        document.getElementById('st-esw').onclick = () => { const x = et.value; et.value = ea.value; ea.value = x; };
-        document.getElementById('st-esv').onclick = async () => {
-            const t = et.value.trim(), a = ea.value.trim();
-            if (!t) return;
-            storeMeta[ik(it)] = { t, a: a || 'Sin autor' };
-            await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
-            it.title = t; it.author = a || 'Sin autor';
-            sh.querySelector('.st-dt').textContent = it.title; sh.querySelector('.st-da').textContent = it.author;
-            box.style.display = 'none'; renderStore();
-        };
-        document.getElementById('st-ers').onclick = async () => {
-            delete storeMeta[ik(it)]; delete storeMeta[it.f.name];
-            await dbPut("settings", { key: "storeMeta", value: storeMeta }).catch(() => {});
-            applyMeta();
-            et.value = it.title; ea.value = it.author === 'Sin autor' ? '' : it.author;
-            sh.querySelector('.st-dt').textContent = it.title; sh.querySelector('.st-da').textContent = it.author;
-            renderStore();
-        };
     }
 
     // Tarjeta provisional en la biblioteca mientras se descarga: portada en gris que se va coloreando de abajo arriba
