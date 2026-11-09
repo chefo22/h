@@ -759,7 +759,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
 #store-section{display:none;padding-bottom:0;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
-.st-tag{margin-left:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
+.st-tag{margin-right:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
 .st-scroll{display:flex;gap:14px;overflow-x:auto;padding:5px 0;scrollbar-width:none}
 .st-scroll .book-card{flex:none}
 .st-scroll::-webkit-scrollbar{display:none}
@@ -2902,6 +2902,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // separa la nota final entre paréntesis (traductor, narrador, edición…): "Título (nota)" → { t: "Título", note: "nota" }
     // Códigos de editorial que van entre paréntesis al final del nombre, p. ej. "(PLT)". Añade aquí los que uses.
     const PUBLISHERS = { PLT: 'Planeta', PNG: 'Penguin Random House', ADB: 'Audible' };
+    // Color del nombre de la editorial en su fila
+    const PUB_COLORS = { ADB: '#fdd835', PLT: '#4a90e2', PNG: '#ff9f43' };
     const publisherName = c => c ? (PUBLISHERS[String(c).trim().toUpperCase()] || c) : '';
     function unNote(t) {
         const m = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(t || "");
@@ -3110,30 +3112,32 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             return noPar(ord[0].title);   // si no hay prefijo común, el nombre de la saga suele ser el del libro 1
         };
         bucket(items, i => i.ser != null && i.author !== 'Sin autor' ? normT(i.author) + '|' + i.ser : null).filter(l => l.length >= 2)
-            .forEach(l => addTo(sagas, serName(l) + ' · saga', l));
+            .forEach(l => addTo(sagas, serName(l), l));
         // 1) sagas: título con número ("Libro 2", "Vol. 3"...) o primeras palabras en común
         const stem = t => { const r = t.replace(/\s*[,:\-–]?\s*\b(libro|vol(?:umen)?\.?|parte|tomo|book|episodio|n[ºo°]\.?|#)\s*\d+\b.*$/i, '').replace(/\s+\d{1,2}$/, ''); return r !== t && r.length >= 3 ? r : null; };
         bucket(items, i => { const s = stem(i.title); return s && normT(s); }).filter(l => l.length >= 2)
-            .forEach(l => addTo(sagas, stem(l[0].title) + ' · saga', l));
+            .forEach(l => addTo(sagas, stem(l[0].title), l));
         bucket(items, i => { const w = sigW(i.title); return w.length >= 3 && w.slice(0, 2).join(' ').length >= 8 ? w.slice(0, 2).join(' ') : null; })
             .filter(l => l.length >= 3 && new Set(l.map(i => verKey(i.title))).size >= 2)
-            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(sagas, commonName(l) + ' · saga', l));
+            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(sagas, commonName(l), l));
         // 2) mismo título (otras traducciones, voces, ediciones), salvo que ya esté dentro de una saga
         const inSaga = list => sagas.some(g => { const s = new Set(g.list.map(i => i.f.name)); return list.every(i => s.has(i.f.name)); });
         const vers = [];
         bucket(items, i => verKey(i.title)).filter(l => l.length >= 2 && sigW(l[0].title).join('').length >= 3)
             .filter(l => !inSaga(l))
-            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(vers, l[0].title + ' · ' + l.length + ' versiones', l));
+            .sort((x, y) => cmpEs(x[0].title, y[0].title)).forEach(l => addTo(vers, l[0].title, l));
         // 3) mismo autor
         const aut = [];
         bucket(items, i => i.author !== 'Sin autor' && i.author.toLowerCase()).filter(l => l.length >= 2)
             .sort((x, y) => cmpEs(x[0].author, y[0].author)).forEach(l => addTo(aut, l[0].author, l));
+        sagas.forEach(g => g.tag = 'Saga');
+        vers.forEach(g => g.tag = g.list.length + ' versiones');
         aut.forEach(g => g.kind = 'author');
         // 4) misma editorial (código entre paréntesis al final del nombre: PLT, PNG, ADB…)
         const pub = [];
         bucket(items, i => i.note ? String(i.note).trim().toUpperCase() : null).filter(l => l.length >= 2)
             .sort((x, y) => cmpEs(publisherName(x[0].note), publisherName(y[0].note)))
-            .forEach(l => pub.push({ name: publisherName(l[0].note) + ' · editorial', list: l }));   // sin deduplicar contra sagas/autores: es otra dimensión
+            .forEach(l => pub.push({ name: publisherName(l[0].note), list: l, color: PUB_COLORS[String(l[0].note).trim().toUpperCase()] || null }));   // sin deduplicar contra sagas/autores: es otra dimensión
         pub.forEach(g => g.kind = 'publisher');
         return [...vers, ...sagas, ...aut, ...pub];
     }
@@ -3186,13 +3190,17 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             setTimeout(() => body.classList.remove('st-anim'), 3500);
         }
         let rowIdx = 0;
-        const row = (title, list, grid, tag) => {
+        const row = (title, list, grid, tags, color) => {
             if (!list.length) return;
             const r = document.createElement('div'); r.className = 'st-row';
             r.style.setProperty('--rd', (0.15 + Math.min(rowIdx++, 6) * 0.12) + 's');
             r.innerHTML = '<h4></h4><div class="' + (grid ? 'st-grid' : 'st-scroll') + '"></div>';
             r.firstChild.textContent = title;
-            if (tag) { const t = document.createElement('span'); t.className = 'st-tag'; t.textContent = tag; r.firstChild.appendChild(t); }
+            // etiquetas (Saga, Editorial, En escucha…) delante del título del grupo
+            const h = r.firstChild; h.textContent = '';
+            [].concat(tags || []).filter(Boolean).forEach(tg => { const t = document.createElement('span'); t.className = 'st-tag'; t.textContent = tg; h.appendChild(t); });
+            if (color) { const ts = document.createElement('span'); ts.textContent = title; ts.style.color = color; h.appendChild(ts); }
+            else h.appendChild(document.createTextNode(title));
             list.forEach((it, i) => { const c = mkCard(it, obs); c.style.setProperty('--cd', Math.min(i, 8) * 0.05 + 's'); r.lastChild.appendChild(c); });
             body.appendChild(r);
         };
@@ -3224,8 +3232,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
         const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx));
         const rest = ranked.filter(x => !x.r);
-        hits.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder), false, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'); });
-        rest.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder)); });
+        hits.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder), false, [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'], x.g.color); });
+        rest.forEach(x => { x.g.list.forEach(i => used.add(i.f.name)); row(x.g.name, x.g.list.sort(byOrder), false, x.g.tag, x.g.color); });
         row('Más audiolibros', items.filter(i => !used.has(i.f.name)).sort(byTitle));
     }
 
