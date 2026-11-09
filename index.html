@@ -3499,6 +3499,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
         const sn = storeList.length > 1 ? ((storeList.find(x => x.id === it.sid) || {}).name || '') : '';
         sh.querySelector('.st-di').textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx : '', publisherName(it.note), mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
+        if (!it.cover) {   // por qué no hay portada: lo que dijo el análisis del propio archivo
+            const dg = storeDiag[it.f.name];
+            sh.querySelector('.st-di').textContent += (sh.querySelector('.st-di').textContent ? ' · ' : '') + 'Sin portada en el archivo' + (dg ? ' (' + dg + ')' : '');
+        }
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(ik(it));
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
