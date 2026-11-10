@@ -772,7 +772,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-row h4{display:flex;align-items:center}
 .st-live{margin-left:auto;padding-left:8px;font-size:20px;color:var(--color-principal)}
 .st-tag{margin-right:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
-.st-scroll{display:flex;gap:14px;overflow-x:auto;padding:5px 0;scrollbar-width:none}
+.st-scroll{display:flex;gap:14px;overflow-x:auto;padding:12px 0 5px;margin-top:-7px;scrollbar-width:none}
 .st-scroll .book-card{flex:none}
 .st-scroll::-webkit-scrollbar{display:none}
 .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:clamp(10px,3vw,20px);padding:10px 0;justify-items:center;align-items:start}
@@ -1690,7 +1690,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     if (listening.length > 0 && groupId !== lastGroup) {
                         const gt = document.createElement('div');
                         gt.className = 'lib-group-title';
-                        gt.textContent = inListening ? 'En escucha' : 'Resto de la biblioteca';
+                        gt.textContent = inListening ? 'En escucha' : 'Por empezar';
                         list.appendChild(gt);
                     }
                     lastGroup = groupId;
