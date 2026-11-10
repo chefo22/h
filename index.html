@@ -712,7 +712,6 @@
             <input id="store-url" type="password" autocomplete="off" placeholder="Enlace de la tienda">
             <button class="st-btn" onclick="addStore()">Añadir</button>
         </div>
-        <div id="st-chips"></div>
         <input id="st-q" placeholder="Buscar en la tienda" oninput="renderStore()">
         <div id="store-status"></div>
         <div id="library-list">
@@ -754,7 +753,7 @@
 body.has-mini-player .player-container:not(.player-active) #library-container{padding-bottom:112px}
 .player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
 .player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
-.player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status,.player-active #st-chips{display:none!important}
+.player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status {display:none!important}
 .st-top{display:none;justify-content:center;gap:22px;padding:0 0 6px}
 .st-top.show{display:flex}
 .st-ic{color:#bbb;font-size:22px;cursor:pointer}
@@ -768,10 +767,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-srow{display:flex;align-items:center;gap:10px;padding:4px 0}
 .st-srow span{flex:1;min-width:0;text-align:left;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-srow .st-btn{padding:6px 12px;background:#2a2a2a}
-#st-chips{display:flex;gap:8px;overflow-x:auto;padding:0 0 8px;scrollbar-width:none}
-#st-chips::-webkit-scrollbar{display:none}
-.st-chip{flex:none;background:#1c1c1c;color:#bbb;border:1px solid #333;border-radius:16px;padding:6px 14px;font-size:.75rem;font-weight:600}
-.st-chip.on{background:var(--color-principal);color:#fff;border-color:transparent}
 #store-section{display:none;padding-bottom:0;text-align:left}
 .st-row h4{margin:18px 2px 8px;font-size:.9rem;font-weight:700}
 .st-row h4{display:flex;align-items:center}
@@ -2762,7 +2757,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 const u = (o && o.value) || DEFAULT_STORE_URL;
                 if (u) { storeList = [{ id: 's0', name: 'Tienda 1', url: u }]; await saveStoreList(); }
             }
-            renderStoreList(); renderChips();
+            renderStoreList();
             if (storeList.length) loadStore();
             else document.getElementById('store-status').textContent = "Toca el icono de enlace para añadir tu tienda.";
         } catch (err) {}
@@ -2784,7 +2779,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
 
     // ── Varias tiendas a la vez ───────────────────────────────────────
-    let storeList = [], storeFilter = 'all';
+    let storeList = [];
     const saveStoreList = () => dbPut("settings", { key: "storeList", value: storeList }).catch(() => {});
     function renderStoreList() {
         const el = document.getElementById('store-list'); if (!el) return;
@@ -2799,22 +2794,12 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             r.append(n, e, c, d); el.appendChild(r);
         });
     }
-    function renderChips() {
-        const el = document.getElementById('st-chips'); if (!el) return;
-        el.innerHTML = '';
-        if (storeList.length < 2) { storeFilter = 'all'; return; }
-        [{ id: 'all', name: 'Todas' }, ...storeList].forEach(s => {
-            const b = document.createElement('button'); b.className = 'st-chip' + (storeFilter === s.id ? ' on' : ''); b.textContent = s.name;
-            b.onclick = () => { storeFilter = s.id; renderChips(); renderStore(); };
-            el.appendChild(b);
-        });
-    }
     async function addStore() {
         const ue = document.getElementById('store-url'), ne = document.getElementById('store-name');
         const url = ue.value.trim(); if (!url) return;
         if (!storeList.some(s => s.url === url)) storeList.push({ id: 's' + Date.now().toString(36), name: ne.value.trim() || 'Tienda ' + (storeList.length + 1), url });
         ue.value = ''; ne.value = '';
-        await saveStoreList(); renderStoreList(); renderChips(); loadStore();
+        await saveStoreList(); renderStoreList(); loadStore();
     }
     // Renombrar una tienda: el nombre se convierte en un campo editable (Enter o salir = guardar, Esc = cancelar)
     function renameStore(id, span) {
@@ -2831,7 +2816,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             if (save && v && v !== s.name) {
                 s.name = v;
                 await saveStoreList();
-                renderChips(); renderStore();
+                renderStore();
             }
             renderStoreList();
         };
@@ -2842,8 +2827,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const s = storeList.find(x => x.id === id);
         if (!s || !confirm('¿Quitar "' + s.name + '" de tus tiendas?')) return;
         storeList = storeList.filter(x => x.id !== id);
-        if (storeFilter === id) storeFilter = 'all';
-        await saveStoreList(); renderStoreList(); renderChips(); loadStore();
+        await saveStoreList(); renderStoreList(); loadStore();
     }
 
     async function loadOneStore(s) {
@@ -2896,7 +2880,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         applyMeta();
         const msg = errs.join(" · ");
         status.textContent = msg;
-        renderChips(); renderStore();
+        renderStore();
     }
 
     function storeOwned() {
@@ -3224,7 +3208,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const byTitle = (x, y) => cmpEs(x.title, y.title);
         // dentro de una saga/autor: por número de colección y orden (1.1, 1.2, … 1.10); si faltan números, por título
         const byOrder = (x, y) => (x.idx != null && y.idx != null) ? (cmpEs(x.author, y.author) || (x.ser - y.ser) || (x.idx - y.idx) || ((x.sub || 0) - (y.sub || 0)) || cmpEs(x.title, y.title)) : cmpEs(x.title, y.title);
-        const items = storeFilter === 'all' ? storeItems : storeItems.filter(i => i.sid === storeFilter);
+        const items = storeItems;
         if (q) { row('Resultados', items.filter(i => (i.title + ' ' + i.author).toLowerCase().includes(q)).sort(byTitle), true); return; }
         const used = new Set();
         // Primero los grupos (autor / saga / versiones) de lo que estás escuchando o has escuchado
