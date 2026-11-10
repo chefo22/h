@@ -3253,8 +3253,35 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
         const hits = ranked.filter(x => x.r).sort((x, y) => (y.r.s - x.r.s) || (y.r.ts - x.r.ts) || (x.idx - y.idx) || ((x.sub || 0) - (y.sub || 0)));
         const rest = ranked.filter(x => !x.r);
-        hits.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'], x.g.color); });
-        rest.forEach(x => { x.g.list.forEach(i => used.add(ik(i))); row(x.g.name, x.g.list.sort(byOrder), false, x.g.tag, x.g.color); });
+        // Orden: sagas primero; los grupos de versiones del mismo libro van junto a la saga/autor que los contiene;
+        // los que no tienen contenedor se reparten por la lista en vez de juntarse
+        const isSaga = x => x.g.tag === 'Saga';
+        const isVer = x => /versiones$/.test(x.g.tag || '');
+        const showEntry = x => {
+            x.g.list.forEach(i => used.add(ik(i)));
+            row(x.g.name, x.g.list.sort(byOrder), false, x.r ? [x.g.tag, x.r.s === 2 ? 'En escucha' : 'Ya escuchado'] : x.g.tag, x.g.color);
+        };
+        const sagaEntries = [...hits.filter(isSaga), ...rest.filter(isSaga)];
+        const otherEntries = [...hits.filter(x => !isSaga(x) && !isVer(x)), ...rest.filter(x => !isSaga(x) && !isVer(x))];
+        const verEntries = [...hits.filter(isVer), ...rest.filter(isVer)];
+        const containers = [...sagaEntries, ...otherEntries.filter(x => x.g.kind === 'author')].map(c => ({ c, set: new Set(c.g.list.map(ik)) }));
+        const attached = new Map(), orphans = [];
+        verEntries.forEach(v => {
+            const hit = containers.find(k => v.g.list.some(i => k.set.has(ik(i))));
+            if (hit) { if (!attached.has(hit.c)) attached.set(hit.c, []); attached.get(hit.c).push(v); } else orphans.push(v);
+        });
+        const expand = arr => arr.flatMap(e => [e, ...(attached.get(e) || [])]);
+        let sagaBlock = expand(sagaEntries), otherBlock = expand(otherEntries);
+        const spread = (target, extra) => {      // reparte "extra" a intervalos regulares dentro de "target"
+            const M = target.length, N = extra.length, out = []; let k = 0;
+            for (let i = 0; i <= M; i++) {
+                while (k < N && Math.floor((k + 1) * M / (N + 1)) === i) out.push(extra[k++]);
+                if (i < M) out.push(target[i]);
+            }
+            return out;
+        };
+        if (otherBlock.length) otherBlock = spread(otherBlock, orphans); else sagaBlock = spread(sagaBlock, orphans);
+        [...sagaBlock, ...otherBlock].forEach(showEntry);
         row('Más audiolibros', items.filter(i => !used.has(ik(i))).sort(byTitle));
     }
 
