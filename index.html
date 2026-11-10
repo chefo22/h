@@ -1405,7 +1405,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             h /= 6;
         }
         const fH = isNaN(h) ? 0.58 : h;
-        const fS = isNaN(s) ? 0.85 : Math.min(Math.max(s, 0.75), 0.9);
+        const fS = isNaN(s) ? 0.85 : Math.min(Math.max(s, 0.48), 0.72);
         const fL = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65);
         const f = (p, q, t) => { if (t<0) t+=1; if (t>1) t-=1; if (t<1/6) return p+(q-p)*6*t; if (t<1/2) return q; if (t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
         const q = fL < 0.5 ? fL*(1+fS) : fL+fS-fL*fS, pp = 2*fL-q;
@@ -2991,7 +2991,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                         if (mx === r) h = (g - b) / df + (g < b ? 6 : 0); else if (mx === g) h = (b - r) / df + 2; else h = (r - g) / df + 4;
                         h /= 6;
                     }
-                    const fh = isNaN(h) ? 0.58 : h, fs = isNaN(sa) ? 0.85 : Math.min(Math.max(sa, 0.75), 0.9), fl = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65);
+                    const fh = isNaN(h) ? 0.58 : h, fs = isNaN(sa) ? 0.85 : Math.min(Math.max(sa, 0.48), 0.72), fl = isNaN(l) ? 0.6 : Math.min(Math.max(l, 0.55), 0.65);
                     const f = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
                     const q = fl < 0.5 ? fl * (1 + fs) : fl + fs - fl * fs, p = 2 * fl - q;
                     const hx = x => Math.round(f(p, q, x) * 255).toString(16).padStart(2, '0');
