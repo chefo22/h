@@ -3374,6 +3374,35 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
 
     // MP3: frames CHAP de la etiqueta ID3v2
+    // Duración total: M4A/M4B desde mvhd; MP3 desde la cabecera Xing/Info o, si no, estimada por bitrate constante
+    function mp4Duration(b) {
+        for (let i = b.indexOf(0x6d); i !== -1 && i + 36 <= b.length; i = b.indexOf(0x6d, i + 1)) {
+            if (fourcc(b, i) !== 'mvhd') continue;
+            const v = b[i + 4];
+            const ts = v === 1 ? u32(b, i + 24) : u32(b, i + 16);
+            const du = v === 1 ? u32(b, i + 28) * 4294967296 + u32(b, i + 32) : u32(b, i + 20);
+            return ts > 0 && du > 0 ? du / ts : null;
+        }
+        return null;
+    }
+    function mp3Duration(b, total) {
+        let pos = 0;
+        if (b.length > 10 && b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) pos = 10 + synchsafe(b, 6);
+        const BR1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], BR2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+        const SR = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+        for (let i = pos; i + 4 <= b.length && i < pos + 8192; i++) {
+            if (b[i] !== 0xFF || (b[i + 1] & 0xE0) !== 0xE0) continue;
+            const ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3, bi = b[i + 2] >> 4, si = (b[i + 2] >> 2) & 3;
+            if (ver === 1 || layer !== 1 || bi === 0 || bi === 15 || si === 3) continue;
+            const sr = SR[ver][si], br = (ver === 3 ? BR1 : BR2)[bi] * 1000, spf = ver === 3 ? 1152 : 576;
+            const mono = ((b[i + 3] >> 6) & 3) === 3;
+            const xo = i + 4 + (ver === 3 ? (mono ? 17 : 32) : (mono ? 9 : 17));
+            const tag = xo + 8 <= b.length ? String.fromCharCode(b[xo], b[xo + 1], b[xo + 2], b[xo + 3]) : '';
+            if ((tag === 'Xing' || tag === 'Info') && (b[xo + 7] & 1) && xo + 12 <= b.length) return u32(b, xo + 8) * spf / sr;
+            return total > pos && br ? (total - pos) * 8 / br : null;
+        }
+        return null;
+    }
     function id3Chapters(b) {
         if (!(b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33)) return null;
         const v = b[3], end = Math.min(b.length, 10 + synchsafe(b, 6));
@@ -3429,17 +3458,18 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         let bytes = new Uint8Array(await head.arrayBuffer());
         if (bytes.length > 10 && fourcc(bytes, 4) !== 'ftyp' && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
             const tagEnd = 10 + synchsafe(bytes, 6);
-            if (tagEnd > bytes.length) { head = await headBlob(node, Math.min(tagEnd, 25 * 1048576)); bytes = new Uint8Array(await head.arrayBuffer()); }
+            if (tagEnd + 8192 > bytes.length) { head = await headBlob(node, Math.min(tagEnd + 8192, 25 * 1048576)); bytes = new Uint8Array(await head.arrayBuffer()); }
         }
         D("descargado " + (bytes.length / 1048576).toFixed(1) + " MB del inicio");
-        let blob = head, chapters = { has: null };
+        let blob = head, chapters = { has: null }, duration = null;
         if (bytes.length > 8 && fourcc(bytes, 4) === 'ftyp') {
             blob = await mp4Assemble(node, bytes, total || bytes.length, D);
-            if (blob) chapters = mp4Chapters(new Uint8Array(await blob.arrayBuffer()));
+            if (blob) { const mb = new Uint8Array(await blob.arrayBuffer()); chapters = mp4Chapters(mb); duration = mp4Duration(mb); }
         } else {
             chapters = id3Chapters(bytes) || { has: null };
+            try { duration = mp3Duration(bytes, total); } catch (e) {}
         }
-        if (!blob) return { cover: null, chapters };
+        if (!blob) return { cover: null, chapters, duration };
         // 2) analiza lo descargado
         let meta = {};
         const cover = await new Promise(res => {
@@ -3457,7 +3487,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 });
             } catch (e) { D("jsmediatags: " + e.message); res(null); }
         });
-        return { cover, chapters, title: meta.title, artist: meta.artist };
+        return { cover, chapters, duration, title: meta.title, artist: meta.artist };
     }
 
     // Comparación laxa de títulos para no aceptar resultados que no tienen nada que ver
@@ -3498,6 +3528,16 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         } catch (e) { console.warn("Capítulos:", e); }
         return null;
     }
+    async function getStoreDuration(it) {
+        if (it.duration) return it.duration;
+        const key = "storeDur1:" + ik(it);
+        try { const c = await dbGet("settings", key); if (c && c.value) return (it.duration = c.value); } catch (e) {}
+        try {
+            const a = await analyzeOnce(it, false);
+            if (a && a.duration > 0) { it.duration = a.duration; dbPut("settings", { key, value: a.duration }).catch(() => {}); return a.duration; }
+        } catch (e) { console.warn("Duración:", e); }
+        return null;
+    }
     function chapterText(c) {
         if (!c || c.has === null) return "";
         if (!c.has) return "sin capítulos";
@@ -3518,11 +3558,16 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         sh.querySelector('.st-da').textContent = it.author;
         const mb = it.f.size ? (it.f.size / 1048576).toFixed(0) + ' MB' : '';
         const sn = storeList.length > 1 ? ((storeList.find(x => x.id === it.sid) || {}).name || '') : '';
-        sh.querySelector('.st-di').textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx + (it.sub != null ? '.' + it.sub : '') : '', publisherName(it.note), mb, chapterText(it.chapters), sn].filter(Boolean).join(' · ');
-        if (!it.cover) {   // por qué no hay portada: lo que dijo el análisis del propio archivo
-            const dg = storeDiag[it.f.name];
-            sh.querySelector('.st-di').textContent += (sh.querySelector('.st-di').textContent ? ' · ' : '') + 'Sin portada en el archivo' + (dg ? ' (' + dg + ')' : '');
-        }
+        const paintInfo = () => {
+            const el = sh.querySelector('.st-di');
+            el.textContent = [it.ser != null ? (it.saga ? it.saga + ' · ' : '') + 'Libro ' + it.ser + '.' + it.idx + (it.sub != null ? '.' + it.sub : '') : '', publisherName(it.note), mb, it.duration ? fmtRemaining(it.duration) : '', chapterText(it.chapters), sn].filter(Boolean).join(' · ');
+            if (!it.cover) {   // por qué no hay portada: lo que dijo el análisis del propio archivo
+                const dg = storeDiag[it.f.name];
+                el.textContent += (el.textContent ? ' · ' : '') + 'Sin portada en el archivo' + (dg ? ' (' + dg + ')' : '');
+            }
+        };
+        paintInfo();
+        if (!it.duration) getStoreDuration(it).then(d => { if (d && storeSheetIt === it && !it._dl) paintInfo(); });
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(ik(it));
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
@@ -3626,6 +3671,82 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
     }
 
+
+    // ===== Sagas numeradas: al 90 % se descarga el siguiente libro y al terminar empieza solo =====
+    const sagaPre = new Set(); let _autoPlayName = null;
+    const bookKeyOf = r => (r.origName || r.name) + '|' + ((r.data && r.data.size) || 0);
+    function allLocalBooks() {
+        return new Promise(res => {
+            const out = [];
+            try { db.transaction(["books"], "readonly").objectStore("books").openCursor().onsuccess = ev => { const c = ev.target.result; if (c) { out.push(c.value); c.continue(); } else res(out); }; }
+            catch (e) { res(out); }
+        });
+    }
+    // Siguiente libro de la misma saga (mismo autor y mismo número de saga, siguiente en X.Y.Z); null si no hay
+    async function sagaNext(curName) {
+        const recs = await allLocalBooks();
+        const cur = recs.find(r => r.name === curName); if (!cur) return null;
+        const pool = new Map();
+        storeItems.forEach(it => { if (it.ser != null) pool.set(ik(it), { key: ik(it), it, a: normT(it.author || ''), ser: it.ser, idx: it.idx, sub: it.sub || 0 }); });
+        recs.forEach(r => {
+            const k = bookKeyOf(r);
+            if (pool.has(k)) { pool.get(k).rec = r; return; }
+            const pn = parseStoreName(r.origName || r.name);
+            if (pn.ser != null) pool.set(k, { key: k, rec: r, a: normT(pn.author || ''), ser: pn.ser, idx: pn.idx, sub: pn.sub || 0 });
+        });
+        const me = pool.get(bookKeyOf(cur)); if (!me) return null;
+        let best = null;
+        pool.forEach(e => {
+            if (e.a !== me.a || e.ser !== me.ser) return;
+            if (e.idx < me.idx || (e.idx === me.idx && e.sub <= me.sub)) return;   // anteriores y otras versiones del mismo número
+            if (!best || e.idx < best.idx || (e.idx === best.idx && e.sub < best.sub)) best = e;
+        });
+        return best;
+    }
+    function sagaDownload(nx, onFail) {
+        const it = nx.it;
+        if (!it || storeDl.has(ik(it)) || it._dl) return;
+        storeGet(it, (t, pct, retry) => {
+            it._dl = (retry || t.startsWith('EN TU BIBLIOTECA')) ? null : { t, pct };
+            if (retry && onFail) onFail();
+        }, () => {});
+    }
+    async function preloadNextSaga() {
+        const name = currentFileName;
+        if (!name || sagaPre.has(name)) return;
+        sagaPre.add(name);
+        try {
+            const nx = await sagaNext(name);
+            if (nx && !nx.rec) sagaDownload(nx, () => setTimeout(() => sagaPre.delete(name), 60000));
+        } catch (e) { sagaPre.delete(name); }
+    }
+    audio.addEventListener('timeupdate', () => {
+        if (!currentFileName || sagaPre.has(currentFileName) || audio.paused) return;
+        if (audio.duration > 0 && isFinite(audio.duration) && audio.currentTime / audio.duration >= 0.9) preloadNextSaga();
+    });
+    audio.addEventListener('ended', async () => {
+        const name = currentFileName; if (!name) return;
+        try { saveProgress(); } catch (e) {}
+        let nx = null;
+        try { nx = await sagaNext(name); } catch (e) {}
+        if (!nx || currentFileName !== name) return;
+        const start = rec => { if (currentFileName !== name) return; timerMsg.textContent = ''; _autoPlayName = rec.name; processAudioFile(rec.data); };
+        if (nx.rec) return start(nx.rec);
+        if (!nx.it) return;
+        timerMsg.textContent = 'Descargando el siguiente libro de la saga…';
+        sagaDownload(nx);
+        for (let i = 0; i < 600 && currentFileName === name; i++) {      // espera hasta ~15 min a que termine la descarga
+            await new Promise(r => setTimeout(r, 1500));
+            if (currentFileName !== name) return;
+            const rec = (await allLocalBooks()).find(r => bookKeyOf(r) === nx.key);
+            if (rec) return start(rec);
+            if (!storeDl.has(ik(nx.it)) && !nx.it._dl && i > 4) sagaDownload(nx);   // si falló, reintenta
+        }
+        if (currentFileName === name) timerMsg.textContent = '';
+    });
+    audio.addEventListener('loadedmetadata', () => {
+        if (_autoPlayName && _autoPlayName === currentFileName) { _autoPlayName = null; setTimeout(() => audio.play().catch(() => {}), 400); }
+    });
 
     // Genera catalog.json (portadas pequeñas + metadatos). Se hace una sola vez; luego se sube a la carpeta de MEGA.
     function shrinkCover(url, max) {
