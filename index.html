@@ -726,15 +726,19 @@
     </div>
 
     <script>
-    // Mantener pulsado "BIBLIOTECA" muestra/oculta los botones (añadir, buscar, refrescar, enlace)
+    // Mantener pulsado "BIBLIOTECA" oculta/muestra los botones (añadir, buscar, refrescar, enlace)
     (function () {
         const t = document.getElementById('lib-title'), bar = document.querySelector('.st-top');
         if (!t || !bar) return;
         let timer = null, x0 = 0, y0 = 0;
+        // visibles por defecto; se recuerda la última elección del usuario
+        try { if (localStorage.getItem('audiobook_st_bar_hidden') === '1') bar.classList.add('hide'); } catch (_) {}
         const stop = () => { clearTimeout(timer); timer = null; };
         t.addEventListener('pointerdown', e => {
             x0 = e.clientX; y0 = e.clientY; stop();
-            timer = setTimeout(() => { timer = null; bar.classList.toggle('show'); if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {} }, 600);
+            timer = setTimeout(() => { timer = null; const h = bar.classList.toggle('hide');
+                try { localStorage.setItem('audiobook_st_bar_hidden', h ? '1' : '0'); } catch (_) {}
+                if (h) { ['st-cfg', 'st-q'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; }); } if (navigator.vibrate) try { navigator.vibrate(30); } catch (_) {} }, 600);
         });
         t.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
         ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => t.addEventListener(ev, stop));
@@ -754,8 +758,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .player-container:not(.player-active) #library-container::-webkit-scrollbar{display:none}
 .player-container:not(.player-active) #library-list{max-height:none;overflow:visible}
 .player-active #store-section,.player-active .st-top,.player-active #st-cfg,.player-active #st-q,.player-active #store-status {display:none!important}
-.st-top{display:none;justify-content:center;gap:22px;padding:0 0 6px}
-.st-top.show{display:flex}
+.st-top{display:flex;justify-content:center;gap:22px;padding:0 0 6px}
+.st-top.hide{display:none}
 .st-ic{color:#bbb;font-size:22px;cursor:pointer}
 #st-cfg{display:none;gap:8px;padding:4px 4px 8px;flex-wrap:wrap}
 #st-cfg input,#st-q{flex:1;min-width:0;background:#1c1c1c;border:1px solid #333;color:#eee;border-radius:10px;padding:10px 12px;font-size:.85rem}
