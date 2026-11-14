@@ -1376,7 +1376,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // (x >= 56 %, y >= 72 %), donde las carátulas de Audible llevan su etiqueta de color.
     const COLOR_SKIP_X = 28, COLOR_SKIP_Y = 36;
     // Versión del algoritmo de color: al subirla se descartan los colores cacheados con el anterior
-    const COLOR_V = 2;
+    const COLOR_V = 3;
     // Color dominante vibrante de una imagen ya cargada (devuelve hex)
     function dominantColorHex(img) {
         const canvas = document.createElement('canvas');
@@ -1394,7 +1394,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             counts[k] = (counts[k] || 0) + 1;
             if (counts[k] > maxCount) { maxCount = counts[k]; domR = data[i]; domG = data[i+1]; domB = data[i+2]; }
         }
-        if (maxCount === 0) { domR = Math.random()*255; domG = Math.random()*255; domB = Math.random()*255; }
+        if (maxCount === 0) return '#ffffff';   // carátula sin color (blanco y negro): blanco, nada inventado
         const r = domR/255, g = domG/255, b = domB/255;
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
         let h, s, l = (max + min) / 2;
@@ -2972,7 +2972,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                         counts[k] = (counts[k] || 0) + 1;
                         if (counts[k] > maxCount) { maxCount = counts[k]; domR = data[i]; domG = data[i + 1]; domB = data[i + 2]; }
                     }
-                    if (maxCount === 0) { domR = Math.random() * 255; domG = Math.random() * 255; domB = Math.random() * 255; }
+                    if (maxCount === 0) { res('#ffffff'); return; }   // carátula sin color (blanco y negro): blanco, nada inventado
                     const r = domR / 255, g = domG / 255, b = domB / 255;
                     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
                     let h, sa, l = (mx + mn) / 2;
