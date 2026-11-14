@@ -814,8 +814,12 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 /* Tarjetas de la tienda: sin la animación genérica (evita el segundo "parpadeo" al quitar la clase) ni transiciones de color en cascada */
 #st-body .book-card{animation:none}
 #st-body .book-card *{transition:none}
-#st-body .book-card .st-img{position:absolute;inset:0;border-radius:inherit;background-size:cover;background-position:center;opacity:0;transition:opacity .55s ease}
+#st-body .book-card .st-img{position:absolute;inset:0;border-radius:inherit;background-size:cover;background-position:center;opacity:0;transition:opacity .4s ease}
 #st-body .book-card .st-img.on{opacity:1}
+#st-body .book-thumb{background:linear-gradient(160deg,hsl(var(--sk,220) 24% 17%),hsl(calc(var(--sk,220) + 35) 24% 10%))}
+#st-body .book-thumb.st-skel::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.08) 50%,transparent 70%);background-size:220% 100%;animation:stShim 1.5s linear infinite}
+@keyframes stShim{from{background-position:120% 0}to{background-position:-120% 0}}
+@media (prefers-reduced-motion:reduce){#st-body .book-thumb.st-skel::after{animation:none}}
 #st-body .book-card .st-own{z-index:2}
 /* Aparición orgánica de la tienda (solo la primera vez): filas y tarjetas en cascada */
 @keyframes stRise{from{opacity:0;transform:translateY(18px) scale(.97);filter:blur(4px)}to{opacity:1;transform:none;filter:blur(0)}}
@@ -3012,17 +3016,31 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         c.appendChild(sp); return c;
     }
     // capa de imagen con fundido: la portada nunca "salta", siempre aparece en crossfade
-    function setCardImg(th, url) {
+    // precarga y decodifica la portada en segundo plano: cuando la tarjeta llega a la pantalla ya está lista
+    function warmCover(it) {
+        if (!it || !it.cover) return null;
+        if (it._wp && it._wsrc === it.cover) return it._wp;
+        const im = new Image(); im.decoding = 'async'; im.src = it.cover;
+        it._wsrc = it.cover; it._wim = im;   // se guarda la referencia para que el navegador no la descarte enseguida
+        return it._wp = (im.decode ? im.decode() : Promise.resolve()).catch(() => {});
+    }
+    function setCardImg(th, it, instant) {
         const im = document.createElement('div'); im.className = 'st-img';
-        im.style.backgroundImage = url;
+        im.style.backgroundImage = 'url(' + it.cover + ')';
         th.insertBefore(im, th.firstChild);
-        requestAnimationFrame(() => requestAnimationFrame(() => im.classList.add('on')));
+        if (instant) { im.style.transition = 'none'; im.classList.add('on'); }
+        else {
+            // el fundido empieza cuando la imagen ya está decodificada (con tope de espera): nunca se ve un gris vacío
+            const show = () => requestAnimationFrame(() => im.classList.add('on'));
+            Promise.race([warmCover(it), new Promise(r => setTimeout(r, 500))]).then(show);
+        }
         const old = [...th.querySelectorAll('.st-img')].filter(x => x !== im);
         if (old.length) setTimeout(() => old.forEach(x => x.remove()), 700);
     }
     // sin portada incrustada: icono neutro (nada inventado ni sacado de internet)
-    function paintCardImg(th, it) {
-        if (it.cover) { setCardImg(th, 'url(' + it.cover + ')'); return; }
+    function paintCardImg(th, it, instant) {
+        th.classList.remove('st-skel');
+        if (it.cover) { setCardImg(th, it, instant); return; }
         if (!th.querySelector('.st-ph')) th.insertAdjacentHTML('afterbegin', '<i class="material-icons st-ph" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.5rem;opacity:.18">headset</i>');
     }
     function mkCard(it, obs) {
@@ -3033,20 +3051,23 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         // un mismo libro puede estar en varias filas (saga, autor, editorial…): todas sus tarjetas se registran
         // y se rellenan a la vez cuando llega la portada
         (it._cards = it._cards || new Set()).add(d);
-        if (it.cover || it._done) paintCardImg(th, it);
+        // hueco con tono propio de cada libro (estable) y un brillo suave mientras llega la portada, en vez de un gris plano
+        { let hh = 0; const sk = (it.title || it.t0 || '') + (it.author || ''); for (let i = 0; i < sk.length; i++) hh = (hh * 31 + sk.charCodeAt(i)) % 360; th.style.setProperty('--sk', hh); }
+        if (it.cover || it._done) paintCardImg(th, it, true);
+        else th.classList.add('st-skel');
         if (storeOwnedSet.includes(ik(it))) th.insertAdjacentHTML('beforeend', '<i class="material-icons st-own">check</i>');
         lb.appendChild(stLine((it.title || '').toUpperCase(), false));
         lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
         if (it.cover) paintColor(it, d);
         d._it = it;
-        if (!it.cover && !it._done) obs.observe(d);
+        obs.observe(d);   // todas las tarjetas se observan: al verse una se precargan las siguientes de su fila
         return d;
     }
     async function lazyCover(d) {
         const it = d._it;
         const r = await withSlot(async () => {
-            if (!d.isConnected || !d._vis || it.tried) return null;   // ya no está a la vista: no se descarga nada
+            if (!d.isConnected || !(d._vis || d._near) || it.tried) return null;   // ya no está a la vista: no se descarga nada
             it.tried = true;
             const res = await Promise.all([getStoreCover(it), getStoreChapters(it)]);
             await new Promise(ok => setTimeout(ok, 120));             // respiro entre libros para no saturar MEGA
@@ -3062,7 +3083,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             if (!c.isConnected) return;
             if (u) paintColor(it, c);
             paintCardImg(c.firstChild, it);
-            if (c._obs) c._obs.unobserve(c);
         });
     }
 
@@ -3177,10 +3197,26 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const q = document.getElementById('st-q').value.toLowerCase().trim();
         // solo se cargan los datos de las tarjetas que están (o están a punto de estar) en pantalla;
         // si se sale de pantalla antes de que le toque el turno, se descarta y se reintenta al volver a verse
+        // predicción: lo que se ve + las siguientes tarjetas de su fila + las primeras de las filas que están por llegar,
+        // así parece que todo estaba cargado sin descargar la tienda entera
+        const prefetch = (c, near) => {
+            const it = c._it; if (!it) return;
+            if (it.cover) { warmCover(it); return; }
+            if (near && !c._q && !it.tried && !it._done && (typeof coverWait === 'undefined' || coverWait.length < 6)) { c._near = true; c._q = true; lazyCover(c); }
+        };
         const obs = new IntersectionObserver(es => es.forEach(e => {
             const d = e.target; d._vis = e.isIntersecting; d._obs = obs;
-            if (e.isIntersecting && !d._q && d._it && !d._it.tried && !d._it._done) { d._q = true; lazyCover(d); }
-        }), { rootMargin: '120px' });
+            if (!e.isIntersecting) return;
+            if (!d._q && d._it && !d._it.tried && !d._it._done) { d._q = true; lazyCover(d); }
+            else if (d._it && d._it.cover) warmCover(d._it);
+            let n = d.nextElementSibling;
+            for (let i = 0; i < 6 && n; i++, n = n.nextElementSibling) prefetch(n, true);
+        }), { rootMargin: '300px 0px' });
+        const rowObs = new IntersectionObserver(es => es.forEach(e => {
+            if (!e.isIntersecting || e.target._w) return;
+            e.target._w = true;
+            [...e.target.lastChild.children].slice(0, 8).forEach(c => prefetch(c, true));
+        }), { rootMargin: '900px 0px' });
         body.innerHTML = '';
         storeItems.forEach(i => { i._cards = new Set(); });
         const sec = document.getElementById('store-section');
@@ -3208,6 +3244,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             if ([].concat(tags || []).includes('En escucha')) { const ic = document.createElement('i'); ic.className = 'material-icons st-live'; ic.textContent = 'headphones'; ic.title = 'En escucha'; ic.setAttribute('aria-label', 'En escucha'); h.appendChild(ic); }
             list.forEach((it, i) => { const c = mkCard(it, obs); c.style.setProperty('--cd', Math.min(i, 8) * 0.05 + 's'); r.lastChild.appendChild(c); });
             body.appendChild(r);
+            rowObs.observe(r);
         };
         const byTitle = (x, y) => cmpEs(x.title, y.title);
         // dentro de una saga/autor: por número de colección y orden (1.1, 1.2, … 1.10); si faltan números, por título
