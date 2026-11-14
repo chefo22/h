@@ -792,6 +792,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 #st-sheet{display:none;position:fixed;inset:0;z-index:2200;background:#000a;align-items:flex-end}
 .st-sheetbox{width:100%;max-width:480px;margin:0 auto;background:#161616;border-radius:24px 24px 0 0;padding:20px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .st-sheetbox .st-cover{width:60%;max-width:240px}
+/* Botón de la ficha: mismo estilo que "Guardar Cambios" (esquinas grandes, sombra suave del color principal) */
+#st-dl{width:100%;padding:16px!important;border-radius:18px;font-size:.9rem;font-weight:700;letter-spacing:2px;box-shadow:0 10px 20px rgba(var(--color-principal-rgb),.2);transition:transform .15s ease,box-shadow .2s ease}
+#st-dl:active:not(:disabled){transform:scale(.98)}
+#st-dl:disabled{box-shadow:none}
 
 /* Biblioteca: padding para que el botón X no se corte, grupos y barra de progreso */
 #library-container #library-list{padding:12px;box-sizing:border-box}
@@ -3650,7 +3654,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         b.onclick = () => { b.disabled = true; storeGet(it, setBtn, setInfo); };
     }
 
-    // Tarjeta provisional en la biblioteca mientras se descarga: portada en gris que se va coloreando de abajo arriba
+    // Tarjeta provisional en la biblioteca mientras se descarga: portada en gris que se va coloreando de izquierda a derecha
     const storeDl = new Map();
     function dlBuild(d) {
         const c = document.createElement('div'); c.className = 'book-card dl-card'; c.dataset.dl = d.name;
@@ -3668,7 +3672,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     }
     function dlPaint(d) {
         if (!d.el) return;
-        d.el.querySelector('.dl-c').style.clipPath = 'inset(' + (100 - d.pct) + '% 0 0 0)';
+        d.el.querySelector('.dl-c').style.clipPath = 'inset(0 ' + (100 - d.pct) + '% 0 0)';
         d.el.querySelector('.dl-p').textContent = d.pct + '%';
     }
     function dlAdd(it) {
