@@ -2905,9 +2905,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // nombre de archivo -> [título, autor]; convención: "Autor - Título"
     // separa la nota final entre paréntesis (traductor, narrador, edición…): "Título (nota)" → { t: "Título", note: "nota" }
     // Códigos de editorial que van entre paréntesis al final del nombre, p. ej. "(PLT)". Añade aquí los que uses.
-    const PUBLISHERS = { PLT: 'Planeta', PNG: 'Penguin Random House', ADB: 'Audible' };
+    const PUBLISHERS = { PLT: 'Planeta', PNG: 'Penguin Random House', ADB: 'Audible', RBM: 'RB Media' };
     // Color del nombre de la editorial en su fila
-    const PUB_COLORS = { ADB: '#fdd835', PLT: '#4a90e2', PNG: '#ff9f43' };
+    const PUB_COLORS = { ADB: '#fdd835', PLT: '#4a90e2', PNG: '#ff9f43', RBM: '#e5484d' };
     const publisherName = c => c ? (PUBLISHERS[String(c).trim().toUpperCase()] || c) : '';
     function unNote(t) {
         const m = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(t || "");
@@ -3156,7 +3156,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         sagas.forEach(g => g.tag = 'Saga');
         vers.forEach(g => g.tag = g.list.length + ' versiones');
         aut.forEach(g => g.kind = 'author');
-        // 4) misma editorial (código entre paréntesis al final del nombre: PLT, PNG, ADB…)
+        // 4) misma editorial (código entre paréntesis al final del nombre: PLT, PNG, ADB, RBM…)
         const pub = [];
         bucket(items, i => i.note ? String(i.note).trim().toUpperCase() : null).filter(l => l.length >= 2)
             .sort((x, y) => cmpEs(publisherName(x[0].note), publisherName(y[0].note)))
