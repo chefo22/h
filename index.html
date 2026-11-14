@@ -776,7 +776,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-row h4{display:flex;align-items:center}
 .st-live{margin-left:auto;padding-left:8px;font-size:20px;color:var(--color-principal)}
 .st-tag{margin-right:8px;font-size:.5rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-principal);border:1px solid var(--color-principal);border-radius:8px;padding:1px 6px;vertical-align:middle;opacity:.9}
-.st-scroll{display:flex;gap:14px;overflow-x:auto;padding:12px 0 5px;margin-top:-7px;scrollbar-width:none}
+.st-scroll{display:flex;gap:14px;overflow-x:auto;padding:12px 6px 5px 0;margin-top:-7px;scrollbar-width:none}
 .st-scroll .book-card{flex:none}
 .st-scroll::-webkit-scrollbar{display:none}
 .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:clamp(10px,3vw,20px);padding:10px 0;justify-items:center;align-items:start}
@@ -784,7 +784,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .st-grid .st-card{width:auto}
 .st-cover{width:100%;aspect-ratio:1;border-radius:10px;background:#1a1a1a center/cover;position:relative}
 .st-card:active .st-cover{transform:scale(.96)}
-.st-own{position:absolute;right:5px;top:5px;font-size:18px;color:#fff;background:var(--color-principal);border-radius:50%}
+/* el indicador de "ya en tu biblioteca" usa el mismo círculo (.status-dot) que la biblioteca */
 .st-t{font-size:.72rem;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-card small{display:block;color:#888;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-ht{font-size:1.15rem;font-weight:800;line-height:1.2}
@@ -2895,8 +2895,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
         storeItems = all;
         applyMeta();
-        const msg = errs.join(" · ");
-        status.textContent = msg;
+        status.textContent = "";   // los errores de cada tienda (p. ej. sin conexión) solo van a la consola, no se muestran
         renderStore();
     }
 
@@ -3065,7 +3064,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         { let hh = 0; const sk = (it.title || it.t0 || '') + (it.author || ''); for (let i = 0; i < sk.length; i++) hh = (hh * 31 + sk.charCodeAt(i)) % 360; th.style.setProperty('--sk', hh); }
         if (it.cover || it._done) paintCardImg(th, it, true);
         else th.classList.add('st-skel');
-        if (storeOwnedSet.includes(ik(it))) th.insertAdjacentHTML('beforeend', '<i class="material-icons st-own">check</i>');
+        if (storeOwnedSet.includes(ik(it))) th.insertAdjacentHTML('beforeend', '<div class="status-dot st-own"></div>');
         lb.appendChild(stLine((it.title || '').toUpperCase(), false));
         lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
@@ -3633,7 +3632,14 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             b.disabled = !retry;
             if (t.startsWith('EN TU BIBLIOTECA')) { resetBtn(); b.disabled = true; }
         };
-        const setInfo = m => { if (storeSheetIt === it) infoEl.textContent = m; };
+        it._sheetUi = setBtn;
+        // los avisos de la descarga ocupan la línea de datos solo mientras hacen falta; al desaparecer vuelven los metadatos
+        let infoMsg = false;
+        const setInfo = m => {
+            if (storeSheetIt !== it) return;
+            if (m) { infoEl.textContent = m; infoMsg = true; }
+            else if (infoMsg) { infoMsg = false; paintInfo(); }
+        };
         resetBtn();
         if (it._dl && !has) { b.disabled = true; b.textContent = it._dl.t; if (it._dl.pct != null) { b.style.background = 'linear-gradient(90deg,var(--color-principal) ' + it._dl.pct + '%,#2a2a2a ' + it._dl.pct + '%)'; b.style.color = '#fff'; } }
         b.onclick = () => { b.disabled = true; storeGet(it, setBtn, setInfo); };
@@ -3652,6 +3658,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         c.querySelector('.dl-c').style.backgroundImage = d.cu;
         c.querySelector('.dl-t').textContent = d.title; c.querySelector('.dl-a').textContent = d.author;
         if (d.color) { c.style.setProperty('--color-principal', d.color); c.style.setProperty('--color-principal-rgb', hexToRgb(d.color)); }
+        c.style.cursor = 'pointer';
+        c.onclick = () => { if (d.it) openDetail(d.it); };   // misma ficha que en la tienda: metadatos y progreso en vivo
         d.el = c; dlPaint(d);
         return c;
     }
@@ -3660,66 +3668,159 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         d.el.querySelector('.dl-c').style.clipPath = 'inset(0 ' + (100 - d.pct) + '% 0 0)';
         d.el.querySelector('.dl-p').textContent = d.pct + '%';
     }
+    // Las descargas en curso van siempre bajo "Por empezar" (nunca bajo "En escucha")
+    function dlPlace(el) {
+        const list = document.getElementById('library-list'); if (!list) return;
+        const hasListening = !!list.querySelector('.item-reorderable[data-group="listening"]');
+        const hasTitle = [...list.querySelectorAll('.lib-group-title')].some(t => t.textContent === 'Por empezar');
+        if (hasListening && !hasTitle) {
+            const gt = document.createElement('div');
+            gt.className = 'lib-group-title'; gt.dataset.dlTitle = '1'; gt.textContent = 'Por empezar';
+            list.appendChild(gt);
+        }
+        list.appendChild(el);
+    }
     function dlAdd(it) {
         const list = document.getElementById('library-list'); if (!list) return;
-        const d = { name: ik(it), title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), color: it.color || null, pct: 0, el: null };
+        const d = { name: ik(it), title: it.title, author: it.author === 'Sin autor' ? '' : it.author, cu: coverUrl(it), color: it.color || null, pct: 0, el: null, it };
         storeDl.set(d.name, d);
         list.querySelectorAll('[data-dl]').forEach(x => { if (x.dataset.dl === d.name) x.remove(); });
         const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
-        list.appendChild(dlBuild(d));
+        dlPlace(dlBuild(d));
     }
     function dlSet(name, pct) { const d = storeDl.get(name); if (!d) return; d.pct = pct; dlPaint(d); }
-    function dlRemove(name) { const d = storeDl.get(name); if (d && d.el) d.el.remove(); storeDl.delete(name); }
+    function dlRemove(name) {
+        const d = storeDl.get(name); if (d && d.el) d.el.remove(); storeDl.delete(name);
+        // si el título "Por empezar" solo lo creó la descarga y ya no queda nada debajo, se quita
+        const list = document.getElementById('library-list'); if (!list) return;
+        list.querySelectorAll('.lib-group-title[data-dl-title]').forEach(t => { if (!t.nextElementSibling) t.remove(); });
+    }
     function storeDlRestore() {
         const list = document.getElementById('library-list'); if (!list || !storeDl.size) return;
         const hint = [...list.children].find(x => x.textContent === 'BIBLIOTECA VACÍA'); if (hint) hint.remove();
-        storeDl.forEach(d => list.appendChild(dlBuild(d)));
+        storeDl.forEach(d => dlPlace(dlBuild(d)));
+    }
+
+    // ── Descargas reanudables ─────────────────────────────────────────
+    // Lo descargado se guarda en trozos de 8 MB en IndexedDB; si la descarga se corta (o se cierra la app),
+    // al volver a pulsar DESCARGAR continúa por donde iba en vez de empezar de cero.
+    const PART = 'storePart:', PARTMETA = 'storePartMeta:';
+    const partKey = (k, n) => PART + k + '#' + String(n).padStart(6, '0');
+    function partSave(key, n, blob, meta) {
+        return new Promise((res, rej) => {
+            const tx = db.transaction(['settings'], 'readwrite'), st = tx.objectStore('settings');
+            st.put({ key: partKey(key, n), value: blob });
+            st.put({ key: PARTMETA + key, value: meta });   // trozo y su registro en la misma transacción: nunca quedan desfasados
+            tx.oncomplete = () => res(); tx.onerror = tx.onabort = () => rej(tx.error);
+        });
+    }
+    function partClear(key) {
+        return new Promise(res => {
+            try {
+                const tx = db.transaction(['settings'], 'readwrite'), st = tx.objectStore('settings'), p = PART + key + '#';
+                st.delete(IDBKeyRange.bound(p, p + '\uffff')); st.delete(PARTMETA + key);
+                tx.oncomplete = tx.onerror = tx.onabort = () => res();
+            } catch (e) { res(); }
+        });
+    }
+    async function partLoad(key, total) {
+        try {
+            const m = await dbGet('settings', PARTMETA + key), meta = m && m.value;
+            if (!meta || meta.size !== total || !(meta.n > 0)) return null;
+            const blobs = []; let sum = 0;
+            for (let n = 0; n < meta.n; n++) {
+                const r = await dbGet('settings', partKey(key, n));
+                if (!r || !r.value) { await partClear(key); return null; }
+                blobs.push(r.value); sum += r.value.size;
+            }
+            if (sum !== meta.bytes) { await partClear(key); return null; }
+            return { blobs, bytes: meta.bytes, n: meta.n };
+        } catch (e) { return null; }
     }
 
     function storeGet(it, ui, info) {
-        const f = it.f, chunks = [], total = f.size || 0;
-        let loaded = 0, bytes = 0, last = Date.now(), finished = false;
+        const f = it.f, key = ik(it), total = f.size || 0;
+        let chunks = [], segChunks = [], segBytes = 0, segN = 0, saved = 0;   // chunks: trozos ya guardados (Blob); segChunks: cola en memoria
+        let loaded = 0, bytes = 0, last = Date.now(), finished = false, tries = 0, stream = null, attemptId = 0, chain = Promise.resolve();
         const mb = n => (n / 1048576).toFixed(n >= 1e8 ? 0 : 1);
         const show = () => {
             const n = Math.max(loaded, bytes);
-            if (total) { const pct = Math.min(100, Math.round(n / total * 100)); ui(pct + '% · ' + mb(n) + ' / ' + mb(total) + ' MB', pct); dlSet(ik(it), pct); }
+            if (total) { const pct = Math.min(100, Math.round(n / total * 100)); ui(pct + '% · ' + mb(n) + ' / ' + mb(total) + ' MB', pct); dlSet(key, pct); }
             else ui(mb(n) + ' MB descargados', 0);
         };
-        const fail = m => { finished = true; clearInterval(wd); dlRemove(ik(it)); info(''); ui('Error: ' + m + ' · TOCA PARA REINTENTAR', null, true); };
-        ui('Conectando con MEGA…', 0); info(''); dlAdd(it);
+        const flush = () => {
+            if (!segChunks.length) return;
+            const blob = new Blob(segChunks), n = segN++;
+            saved += segBytes; segChunks = []; segBytes = 0; chunks.push(blob);
+            const meta = { size: total, bytes: saved, n: n + 1 };
+            chain = chain.then(() => partSave(key, n, blob, meta)).catch(() => {});
+        };
+        const onHide = () => { if (document.visibilityState === 'hidden' || !document.visibilityState) flush(); };
+        document.addEventListener('visibilitychange', onHide); window.addEventListener('pagehide', flush);
+        const cleanup = () => { finished = true; clearInterval(wd); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', flush); try { stream && stream.destroy && stream.destroy(); } catch (e) {} };
+        const fail = m => { flush(); cleanup(); dlRemove(key); info(''); ui('Error: ' + m + ' · TOCA PARA REANUDAR', null, true); };
         const wd = setInterval(() => {
             if (finished) return;
             const sec = Math.round((Date.now() - last) / 1000);
             if (sec >= 15) info('MEGA no responde desde hace ' + sec + ' s (¿límite de transferencia o mala conexión?). Sigue intentando…');
         }, 3000);
-        let stream;
-        try { stream = f.download({ maxConnections: 4 }); } catch (e) { return fail(e.message || e); }
-        stream.on('progress', p => { loaded = Math.max(loaded, p.bytesLoaded || 0); last = Date.now(); info(''); show(); });
-        stream.on('data', c => { chunks.push(c); bytes += c.length; last = Date.now(); show(); });
-        stream.on('error', e => fail((e && e.message) || e));
-        stream.on('end', async () => {
-            finished = true; clearInterval(wd); info('');
-            ui('Guardando en tu biblioteca…', 100);
-            try {
-                const ext = f.name.split('.').pop().toLowerCase();
-                let fname = f.name;
-                const ex = await localBookRecord(fname);
-                if (ex && ex.data && ex.data.size !== total) {   // mismo nombre pero otro archivo: no se pisa, se guarda aparte
-                    const dot = fname.lastIndexOf('.'), base = dot > 0 ? fname.slice(0, dot) : fname, sfx = dot > 0 ? fname.slice(dot) : '';
-                    for (let n = 2; n < 50; n++) { fname = base + ' (' + n + ')' + sfx; const r2 = await localBookRecord(fname); if (!r2) break; }
-                }
-                const file = new File(chunks, fname, { type: MIME[ext] || 'audio/mpeg' });
-                file._storeOrig = f.name;
-                let cv = it.cover;
-                if (cv && !cv.startsWith("data:")) { try { cv = await blobToDataURL(await (await fetch(cv)).blob()); } catch (e) {} }
-                file._storeCover = cv;
-                dlRemove(ik(it));
-                file._storeTitle = it.title; file._storeAuthor = it.author === 'Sin autor' ? '' : it.author;
-                saveToLibrary(file);
-                ui("EN TU BIBLIOTECA ✓", 100);
-                setTimeout(renderStore, 1200);
-            } catch (e) { fail((e && e.message) || e); }
-        });
+        // si se corta, reintenta solo continuando desde lo ya recibido; si no hay manera, deja el progreso guardado
+        const retry = e => {
+            if (finished) return;
+            const m = (e && e.message) || e;
+            try { stream && stream.destroy && stream.destroy(); } catch (x) {}
+            if (++tries > 8) return fail(m);
+            const wait = Math.min(tries * 2, 10);
+            info('Conexión interrumpida. Reanudando en ' + wait + ' s… (' + mb(bytes) + ' MB conservados)');
+            setTimeout(() => { if (!finished) attempt(); }, wait * 1000);
+        };
+        const attempt = () => {
+            const id = ++attemptId, base = bytes;
+            last = Date.now();
+            try { stream = base > 0 ? f.download({ start: base, maxConnections: 4 }) : f.download({ maxConnections: 4 }); }
+            catch (e) { return retry(e); }
+            stream.on('progress', p => { if (id !== attemptId) return; if (!base) loaded = Math.max(loaded, p.bytesLoaded || 0); last = Date.now(); info(''); show(); });
+            stream.on('data', c => {
+                if (id !== attemptId) return;
+                segChunks.push(c); segBytes += c.length; bytes += c.length; last = Date.now(); tries = 0;
+                if (segBytes >= 8 * 1048576) flush();
+                show();
+            });
+            stream.on('error', e => { if (id === attemptId) { attemptId++; retry(e); } });
+            stream.on('end', async () => {
+                if (id !== attemptId || finished) return;
+                if (total && bytes < total) { attemptId++; return retry('descarga incompleta'); }
+                if (total && bytes > total) { await partClear(key); return fail('tamaño inesperado'); }
+                cleanup(); info('');
+                ui('Guardando en tu biblioteca…', 100);
+                try {
+                    const ext = f.name.split('.').pop().toLowerCase();
+                    let fname = f.name;
+                    const ex = await localBookRecord(fname);
+                    if (ex && ex.data && ex.data.size !== total) {   // mismo nombre pero otro archivo: no se pisa, se guarda aparte
+                        const dot = fname.lastIndexOf('.'), base2 = dot > 0 ? fname.slice(0, dot) : fname, sfx = dot > 0 ? fname.slice(dot) : '';
+                        for (let n = 2; n < 50; n++) { fname = base2 + ' (' + n + ')' + sfx; const r2 = await localBookRecord(fname); if (!r2) break; }
+                    }
+                    const file = new File([...chunks, ...segChunks], fname, { type: MIME[ext] || 'audio/mpeg' });
+                    file._storeOrig = f.name;
+                    let cv = it.cover;
+                    if (cv && !cv.startsWith("data:")) { try { cv = await blobToDataURL(await (await fetch(cv)).blob()); } catch (e) {} }
+                    file._storeCover = cv;
+                    dlRemove(key);
+                    file._storeTitle = it.title; file._storeAuthor = it.author === 'Sin autor' ? '' : it.author;
+                    saveToLibrary(file);
+                    chain = chain.then(() => partClear(key));   // descarga completa: se borra el progreso parcial
+                    ui("EN TU BIBLIOTECA ✓", 100);
+                    setTimeout(renderStore, 1200);
+                } catch (e) { fail((e && e.message) || e); }
+            });
+        };
+        ui('Conectando con MEGA…', 0); info(''); dlAdd(it);
+        // ¿hay una descarga a medias de este libro? se continúa desde ahí
+        partLoad(key, total).then(pr => {
+            if (pr) { chunks = pr.blobs; bytes = saved = pr.bytes; segN = pr.n; info('Reanudando desde ' + mb(bytes) + ' MB…'); show(); }
+            attempt();
+        }).catch(() => attempt());
     }
 
 
@@ -3759,6 +3860,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         if (!it || storeDl.has(ik(it)) || it._dl) return;
         storeGet(it, (t, pct, retry) => {
             it._dl = (retry || t.startsWith('EN TU BIBLIOTECA')) ? null : { t, pct };
+            if (it._sheetUi) it._sheetUi(t, pct, retry);   // si la ficha está abierta, muestra el progreso en vivo
             if (retry && onFail) onFail();
         }, () => {});
     }
