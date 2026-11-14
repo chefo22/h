@@ -1377,6 +1377,26 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     const COLOR_SKIP_X = 28, COLOR_SKIP_Y = 36;
     // Versión del algoritmo de color: al subirla se descartan los colores cacheados con el anterior
     const COLOR_V = 3;
+    // Texto de etiqueta limpio: sin espacios dobles, finales ni caracteres invisibles (si no, "FRANK HERBERT " mide 14 y se anima)
+    // ¿Cabe el texto en la etiqueta (85px)? Se mide el ancho real con la misma tipografía; solo se anima si de verdad no cabe
+    let _nsEl = null;
+    function needsScroll(txt) {
+        txt = normLabel(txt);
+        if (!txt) return false;
+        try {
+            if (!_nsEl) {
+                _nsEl = document.createElement('span');
+                _nsEl.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-weight:700;font-size:0.55rem;line-height:1.2;text-transform:uppercase;pointer-events:none';
+                _nsEl.style.fontFamily = getComputedStyle(document.body).fontFamily;
+                document.body.appendChild(_nsEl);
+            }
+            _nsEl.textContent = txt;
+            const w = _nsEl.getBoundingClientRect().width;
+            if (w > 0) return w > 84;
+        } catch (e) {}
+        return txt.length > 13;   // respaldo si no se puede medir
+    }
+    const normLabel = t => String(t == null ? '' : t).replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+/g, ' ').trim();
     // Color dominante vibrante de una imagen ya cargada (devuelve hex)
     function dominantColorHex(img) {
         const canvas = document.createElement('canvas');
@@ -1582,7 +1602,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             let tPart = cleanName, aPart = "GUARDANDO...";
             if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }
 
-            const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';
+            const checkScroll = (txt) => needsScroll(txt) ? 'active-scroll' : '';
             const spacer = "&nbsp;".repeat(10);
             const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
             const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
@@ -1724,7 +1744,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     const progTime = getProgressTime(bookName);
                     const cleanName = bookName.replace(/\.[^/.]+$/, "").toUpperCase();
                     let tPart = cleanName, aPart = "";
-                    if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
+                    if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => needsScroll(txt) ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
                     const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
                     const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
@@ -1812,9 +1832,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     list.appendChild(card);                    // Aplicar Metadatos en Caché (Sin Bloqueo de Memoria)
                     if (mTitle || mArtist) {
                         const labelEl = card.querySelector('.book-label');
-                        let cleanTitle = (mTitle || bookName).replace(/\.[^/.]+$/, "").toUpperCase();
-                        let cleanArtist = (mArtist || "Autor Desconocido").toUpperCase();
-                        const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';
+                        let cleanTitle = normLabel((mTitle || bookName).replace(/\.[^/.]+$/, "")).toUpperCase();
+                        let cleanArtist = normLabel(mArtist || "Autor Desconocido").toUpperCase();
+                        const checkScroll = (txt) => needsScroll(txt) ? 'active-scroll' : '';
                         const spacer = "&nbsp;".repeat(10);
                         const tCont = checkScroll(cleanTitle) ? (cleanTitle + spacer).repeat(2) : cleanTitle;
                         const aCont = checkScroll(cleanArtist) ? (cleanArtist + spacer).repeat(2) : cleanArtist;
@@ -3008,9 +3028,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 
     // misma etiqueta que la biblioteca: mayúsculas, autor en color principal y marquesina si no cabe
     function stLine(txt, author) {
+        txt = normLabel(txt);
         const c = document.createElement('div'), sp = document.createElement('span');
         c.className = 'marquee-container'; sp.className = 'marquee-text';
-        if (txt.length > 13) { c.classList.add('active-scroll'); sp.textContent = (txt + '\u00a0'.repeat(10)).repeat(2); }
+        if (needsScroll(txt)) { c.classList.add('active-scroll'); sp.textContent = (txt + '\u00a0'.repeat(10)).repeat(2); }
         else sp.textContent = txt;
         if (author) { c.style.color = 'var(--color-principal)'; c.style.opacity = '0.8'; }
         c.appendChild(sp); return c;
