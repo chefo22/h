@@ -2905,7 +2905,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     // nombre de archivo -> [título, autor]; convención: "Autor - Título"
     // separa la nota final entre paréntesis (traductor, narrador, edición…): "Título (nota)" → { t: "Título", note: "nota" }
     // Códigos de editorial que van entre paréntesis al final del nombre, p. ej. "(PLT)". Añade aquí los que uses.
-    const PUBLISHERS = { PLT: 'Planeta', PNG: 'Penguin Random House', ADB: 'Audible', RBM: 'RB Media' };
+    const PUBLISHERS = { PLT: 'Planeta', PNG: 'Penguin Random House', ADB: 'Audible', RBM: 'RB media' };
     // Color del nombre de la editorial en su fila
     const PUB_COLORS = { ADB: '#fdd835', PLT: '#4a90e2', PNG: '#ff9f43', RBM: '#e5484d' };
     const publisherName = c => c ? (PUBLISHERS[String(c).trim().toUpperCase()] || c) : '';
