@@ -1582,7 +1582,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             let tPart = cleanName, aPart = "GUARDANDO...";
             if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }
 
-            const checkScroll = (txt) => txt.length > 12 ? 'active-scroll' : '';
+            const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';
             const spacer = "&nbsp;".repeat(10);
             const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
             const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
@@ -1724,7 +1724,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     const progTime = getProgressTime(bookName);
                     const cleanName = bookName.replace(/\.[^/.]+$/, "").toUpperCase();
                     let tPart = cleanName, aPart = "";
-                    if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => txt.length > 12 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
+                    if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
                     const tContent = checkScroll(tPart) ? (tPart + spacer).repeat(2) : tPart;
                     const aContent = checkScroll(aPart) ? (aPart + spacer).repeat(2) : aPart;
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
@@ -1814,7 +1814,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                         const labelEl = card.querySelector('.book-label');
                         let cleanTitle = (mTitle || bookName).replace(/\.[^/.]+$/, "").toUpperCase();
                         let cleanArtist = (mArtist || "Autor Desconocido").toUpperCase();
-                        const checkScroll = (txt) => txt.length > 12 ? 'active-scroll' : '';
+                        const checkScroll = (txt) => txt.length > 13 ? 'active-scroll' : '';
                         const spacer = "&nbsp;".repeat(10);
                         const tCont = checkScroll(cleanTitle) ? (cleanTitle + spacer).repeat(2) : cleanTitle;
                         const aCont = checkScroll(cleanArtist) ? (cleanArtist + spacer).repeat(2) : cleanArtist;
@@ -3010,7 +3010,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     function stLine(txt, author) {
         const c = document.createElement('div'), sp = document.createElement('span');
         c.className = 'marquee-container'; sp.className = 'marquee-text';
-        if (txt.length > 12) { c.classList.add('active-scroll'); sp.textContent = (txt + '\u00a0'.repeat(10)).repeat(2); }
+        if (txt.length > 13) { c.classList.add('active-scroll'); sp.textContent = (txt + '\u00a0'.repeat(10)).repeat(2); }
         else sp.textContent = txt;
         if (author) { c.style.color = 'var(--color-principal)'; c.style.opacity = '0.8'; }
         c.appendChild(sp); return c;
