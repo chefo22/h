@@ -425,7 +425,7 @@
 
         /* Círculo de estado (arriba a la derecha de cada portada):
            sin círculo = solo en la tienda · anillo vacío = en la biblioteca sin empezar
-           mitad llena = empezado · lleno con ✓ = finalizado */
+           líquido que sube = empezado · lleno con cascos = finalizado */
         .status-dot {
             --dc: var(--bp-color, var(--color-principal));
             position: absolute;
@@ -468,15 +468,24 @@
         }
         .status-dot.s-done { background: var(--dc); }
         .status-dot.s-done::after {
-            content: "";
+            content: "headphones";
             position: absolute;
-            left: 4px;
-            top: 1px;
-            width: 3px;
-            height: 6px;
-            border: solid #111;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Material Icons';
+            font-size: 11px;
+            font-weight: normal;
+            font-style: normal;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            white-space: nowrap;
+            color: #111;
+            -webkit-font-feature-settings: 'liga';
+            font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
         }        .book-label {
             font-size: 0.55rem;
             font-weight: 700;
@@ -882,6 +891,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             <div class="st-ha st-da"></div>
             <div class="st-ha st-di" style="margin-bottom:8px"></div>
             <button class="st-btn" id="st-dl" style="width:100%;padding:14px">DESCARGAR</button>
+            <button class="st-btn" id="st-fin" style="width:100%;padding:12px;background:transparent;color:#888;font-size:.7rem;letter-spacing:1.5px;border-radius:18px;margin-top:2px"></button>
         </div>
     </div>
     <div id="player-ui-container" style="display: none; position: relative;">
@@ -1499,6 +1509,16 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         if (!key || finishedSet.has(key)) return;
         finishedSet.add(key);
         loadFinished().then(() => dbPut('settings', { key: 'finishedBooks', value: Array.from(finishedSet) })).catch(() => {});
+    }
+    function unmarkFinished(key) {
+        if (!finishedSet.has(key)) return;
+        finishedSet.delete(key);
+        loadFinished().then(() => dbPut('settings', { key: 'finishedBooks', value: Array.from(finishedSet) })).catch(() => {});
+    }
+    function setBookProgress(name, t) {
+        progressMem.set(name, t); progressSaved.set(name, Date.now());
+        dbPut('progress', { name, time: t, saved: Date.now() }).catch(() => {});
+        try { localStorage.setItem('audiobook_progress_' + name, t); } catch (e) {}
     }
     // 'new' = sin empezar · 'doing' = empezado · 'done' = finalizado
     function bookState(key, time, dur) {
@@ -3016,6 +3036,31 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
     }
 
+    function paintFinBtn(it) {
+        const fb = document.getElementById('st-fin'); if (!fb) return;
+        const k = ik(it), st = storeOwnedState.get(k) || (finishedSet.has(k) ? 'done' : null);
+        fb.textContent = st === 'done' ? 'QUITAR MARCA DE ESCUCHADO' : 'MARCAR COMO ESCUCHADO';
+        fb.onclick = () => toggleListened(it);
+    }
+    // Marcar / desmarcar a mano un libro como escuchado (esté o no en la biblioteca)
+    async function toggleListened(it) {
+        const k = ik(it);
+        const rec = (await allLocalBooks()).find(r => bookKeyOf(r) === k);
+        const done = (storeOwnedState.get(k) || (finishedSet.has(k) ? 'done' : null)) === 'done';
+        if (rec && currentFileName === rec.name) { alert('Este libro está cargado en el reproductor. Ciérralo o cambia de libro primero.'); return; }
+        const t = rec ? getProgressTime(rec.name) : 0;
+        const mm = rec && rec.data ? metaMem.get(metaKey(rec.data)) : null, dur = mm ? mm.duration : null;
+        if (!done) {
+            if (rec && t > 0 && !isFinished(t, dur) && !confirm('Tienes este libro empezado. Al marcarlo como escuchado se pondrá tu progreso al final. ¿Continuar?')) return;
+            markFinished(k);
+            if (rec && dur) setBookProgress(rec.name, dur);
+        } else {
+            if (rec && t > 0 && (isFinished(t, dur) || !dur) && !confirm('Al quitar la marca, el progreso de este libro volverá a cero. ¿Continuar?')) return;
+            unmarkFinished(k);
+            if (rec && t > 0 && (isFinished(t, dur) || !dur)) setBookProgress(rec.name, 0);
+        }
+        await renderStore(); displayLibrary(); paintFinBtn(it);
+    }
     let storeSheetIt = null, storeSwap = true, storeOwnedSet = [], storeSwapAll = false;
     // nombre de archivo -> [título, autor]; convención: "Autor - Título"
     // separa la nota final entre paréntesis (traductor, narrador, edición…): "Título (nota)" → { t: "Título", note: "nota" }
@@ -3730,7 +3775,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         const b = document.getElementById('st-dl'), has = storeOwnedSet.includes(ik(it));
         b.disabled = has; b.textContent = has ? 'EN TU BIBLIOTECA ✓' : 'DESCARGAR';
         storeSheetIt = it;
-        sh._it = it; paintColor(it, sh, true);
+        sh._it = it; paintColor(it, sh, true); paintFinBtn(it);
         const infoEl = sh.querySelector('.st-di');
         const resetBtn = () => { b.style.background = ''; b.style.color = ''; };
         const setBtn = (t, pct, retry) => {
