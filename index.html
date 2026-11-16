@@ -423,17 +423,60 @@
             transition: transform 0.2s;
         }
 
+        /* Círculo de estado (arriba a la derecha de cada portada):
+           sin círculo = solo en la tienda · anillo vacío = en la biblioteca sin empezar
+           mitad llena = empezado · lleno con ✓ = finalizado */
         .status-dot {
+            --dc: var(--bp-color, var(--color-principal));
             position: absolute;
-            top: -4px;
-            right: -4px;
-            width: 14px;
-            height: 14px;
-            background: var(--color-principal);
+            top: -5px;
+            right: -5px;
+            width: 18px;
+            height: 18px;
+            box-sizing: border-box;
+            background: #111;
             border-radius: 50%;
-            border: 2px solid #111;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--dc);
+            box-shadow: 0 0 0 2px #111, 0 4px 10px rgba(0,0,0,0.5);
             z-index: 2;
+        }
+        /* Empezado: el círculo se llena como un líquido hasta el % escuchado (--p, 0-100) y ondula */
+        .status-dot.s-doing { overflow: hidden; }
+        .status-dot.s-doing::before,
+        .status-dot.s-doing::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            width: 26px;
+            height: 26px;
+            margin-left: -13px;
+            top: calc((100 - var(--p, 50)) * 1%);
+            border-radius: 42%;
+            background: var(--dc);
+            animation: dotWave 3.2s linear infinite;
+            transition: top 0.8s ease;
+        }
+        .status-dot.s-doing::before {
+            opacity: 0.45;
+            border-radius: 38%;
+            animation-duration: 5.5s;
+            animation-direction: reverse;
+        }
+        @keyframes dotWave { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+            .status-dot.s-doing::before, .status-dot.s-doing::after { animation: none; }
+        }
+        .status-dot.s-done { background: var(--dc); }
+        .status-dot.s-done::after {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 1px;
+            width: 3px;
+            height: 6px;
+            border: solid #111;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
         }        .book-label {
             font-size: 0.55rem;
             font-weight: 700;
@@ -1433,6 +1476,50 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     let probeChain = Promise.resolve(); // sondeos de duración en serie
     const regroupDone = new Set();
 
+    // ── Estado "finalizado" ──────────────────────────────────────────────
+    // Se guarda por separado (clave = nombre original|tamaño, la misma identidad que usa la tienda),
+    // así sigue constando como finalizado aunque el libro se borre de la biblioteca.
+    const finishedSet = new Set();
+    const finChecked = new Set();
+    let finishedLoaded = null;
+    const finKey = r => (r.origName || r.name) + '|' + ((r.data && r.data.size) || 0);
+    function loadFinished() {
+        if (!db) return Promise.resolve();
+        if (finishedLoaded) return finishedLoaded;
+        finishedLoaded = new Promise((resolve) => {
+            try {
+                const req = db.transaction(['settings'], 'readonly').objectStore('settings').get('finishedBooks');
+                req.onsuccess = () => { ((req.result && req.result.value) || []).forEach(k => finishedSet.add(k)); resolve(); };
+                req.onerror = () => resolve();
+            } catch (e) { resolve(); }
+        });
+        return finishedLoaded;
+    }
+    function markFinished(key) {
+        if (!key || finishedSet.has(key)) return;
+        finishedSet.add(key);
+        loadFinished().then(() => dbPut('settings', { key: 'finishedBooks', value: Array.from(finishedSet) })).catch(() => {});
+    }
+    // 'new' = sin empezar · 'doing' = empezado · 'done' = finalizado
+    function bookState(key, time, dur) {
+        if (isFinished(time, dur)) { markFinished(key); return 'done'; }
+        if (finishedSet.has(key)) return (time > 0 && dur) ? 'doing' : 'done';   // terminado antes; si lo reescuchas vuelve a 'doing'
+        return time > 0 ? 'doing' : 'new';
+    }
+    // porcentaje de líquido del círculo (acotado para que siempre se note algo de líquido y de vacío)
+    function dotPct(time, dur) {
+        if (!(dur && isFinite(dur) && dur > 0)) return 50;
+        return Math.round(Math.min(94, Math.max(6, time / dur * 100)));
+    }
+    function paintCardDot(name, state) {
+        const list = document.getElementById('library-list'); if (!list) return;
+        const card = Array.from(list.querySelectorAll('.item-reorderable')).find(c => c.dataset.id === name);
+        const th = card && card.querySelector('.book-thumb'); if (!th) return;
+        let d = th.querySelector('.status-dot');
+        if (!d) { d = document.createElement('div'); th.insertBefore(d, th.firstChild); }
+        d.className = 'status-dot s-' + state;
+    }
+
     function loadAllProgress() {
         return new Promise((resolve) => {
             if (!db) return resolve();
@@ -1466,6 +1553,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         if (dur && isFinite(dur) && dur > 0) {
             const p = Math.min(100, Math.max(0, time / dur * 100));
             fill.style.width = p + '%';
+            const dd = card.querySelector('.status-dot');
+            if (dd) dd.style.setProperty('--p', dotPct(time, dur));
             pct.textContent = Math.floor(p) + '%';
             left.textContent = 'quedan ' + fmtRemaining(dur - time);
             box.title = `${Math.floor(p)}% escuchado · quedan ${fmtRemaining(dur - time)}`;
@@ -1671,7 +1760,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         getBookMeta(file)
             .then(m => doSave({ title: m.title, artist: m.artist, cover: m.cover }))
             .catch(() => doSave({}));
-    }    function displayLibrary() { Promise.all([loadAllMeta(), loadAllProgress()]).then(renderLibrary); }
+    }    function displayLibrary() { Promise.all([loadAllMeta(), loadAllProgress(), loadFinished()]).then(renderLibrary); }
     function renderLibrary() {
         const list = document.getElementById('library-list');
         if (!list) return;
@@ -1731,6 +1820,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     card.dataset.group = groupId;
                     
                     const progTime = getProgressTime(bookName);
+                    const dotState = bookState(finKey(bookData), progTime, durOf(bookData));
                     const cleanName = bookName.replace(/\.[^/.]+$/, "").toUpperCase();
                     let tPart = cleanName, aPart = "";
                     if (cleanName.includes("-")) { const r = splitAT(cleanName); tPart = r[0]; aPart = r[1]; }                    const checkScroll = (txt) => needsScroll(txt) ? 'active-scroll' : '';                    const spacer = "&nbsp;".repeat(10);
@@ -1739,7 +1829,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                     let formattedLabel = `<div class="marquee-container ${checkScroll(tPart)}"><span class="marquee-text">${tContent}</span></div>` + 
                                        `<div class="marquee-container ${checkScroll(aPart)}" style="color:var(--color-principal); opacity:0.8;"><span class="marquee-text">${aContent}</span></div>`;                    card.innerHTML = `
                         <div class="book-thumb" style="position:relative">
-                            ${progTime > 0 ? '<div class="status-dot"></div>' : ''}
+                            <div class="status-dot s-${dotState}"></div>
                             <i class="material-icons" style="font-size: 2.5rem; opacity: 0.15;">headset</i>
                             <button class="delete-btn-mini" onclick="event.stopPropagation(); deleteFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">close</i></button>
                             <button class="download-btn-mini" onclick="event.stopPropagation(); downloadFromLibrary('${bookName.replace(/'/g, "\\'")}')"><i class="material-icons" style="font-size: 16px;">download</i></button>
@@ -1838,8 +1928,6 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                         const applyCardColor = (color) => {
                             bookColorCache[bookName] = color;
                             card.style.setProperty('--bp-color', color);
-                            const dot = card.querySelector('.status-dot');
-                            if (dot) dot.style.backgroundColor = color;
                             const secondLine = card.querySelector('.book-label div:nth-child(2)');
                             if (secondLine) secondLine.style.color = color;
                         };
@@ -1881,6 +1969,8 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
             const b = ev.target.result;
             if (b && b.data) {
                 const k = metaKey(b.data);
+                const _mm = metaMem.get(k);
+                if (isFinished(getProgressTime(name), _mm && _mm.duration)) markFinished(finKey(b));
                 metaMem.delete(k);
                 transaction.objectStore("metaCache").delete(k);
             }
@@ -1888,7 +1978,7 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         };
         transaction.oncomplete = () => {
             if (currentFileName === name) location.reload();
-            else displayLibrary();
+            else { displayLibrary(); if (typeof storeItems !== 'undefined' && storeItems.length) renderStore(); }
         };
     }
 
@@ -2181,6 +2271,13 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         if (!currentFileName) return;
         progressMem.set(currentFileName, audio.currentTime);
         progressSaved.set(currentFileName, Date.now());
+        if (isFinished(audio.currentTime, audio.duration)) {
+            if (!finChecked.has(currentFileName)) {
+                finChecked.add(currentFileName);
+                const _n = currentFileName;
+                localBookRecord(_n).then(r => { if (r) { markFinished(finKey(r)); paintCardDot(_n, 'done'); } });
+            }
+        } else finChecked.delete(currentFileName);
         updateCardProgressLive(currentFileName, audio.currentTime, audio.duration);
         // Guardar progreso en IndexedDB (persistencia absoluta)
         dbPut("progress", { name: currentFileName, time: audio.currentTime, saved: Date.now() })
@@ -2899,12 +2996,22 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         renderStore();
     }
 
-    function storeOwned() {
+    const storeOwnedPct = new Map();
+    const storeOwnedState = new Map();   // clave del libro -> 'new' | 'doing' | 'done' (solo los que están en la biblioteca)
+    async function storeOwned() {
+        await Promise.all([loadAllMeta(), loadAllProgress(), loadFinished()]);
         return new Promise(res => {
-            const keys = [];
+            const keys = []; storeOwnedState.clear(); storeOwnedPct.clear();
             db.transaction(["books"], "readonly").objectStore("books").openCursor().onsuccess = ev => {
                 const c = ev.target.result;
-                if (c) { const v = c.value; keys.push((v.origName || v.name) + '|' + ((v.data && v.data.size) || 0)); c.continue(); } else res(keys);
+                if (c) {
+                    const v = c.value, k = (v.origName || v.name) + '|' + ((v.data && v.data.size) || 0);
+                    const mm = v.data ? metaMem.get(metaKey(v.data)) : null;
+                    keys.push(k);
+                    storeOwnedState.set(k, bookState(k, getProgressTime(v.name), mm ? mm.duration : null));
+                    storeOwnedPct.set(k, dotPct(getProgressTime(v.name), mm ? mm.duration : null));
+                    c.continue();
+                } else res(keys);
             };
         });
     }
@@ -3064,7 +3171,9 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         { let hh = 0; const sk = (it.title || it.t0 || '') + (it.author || ''); for (let i = 0; i < sk.length; i++) hh = (hh * 31 + sk.charCodeAt(i)) % 360; th.style.setProperty('--sk', hh); }
         if (it.cover || it._done) paintCardImg(th, it, true);
         else th.classList.add('st-skel');
-        if (storeOwnedSet.includes(ik(it))) th.insertAdjacentHTML('beforeend', '<div class="status-dot st-own"></div>');
+        // sin círculo = solo en la tienda; en la biblioteca (anillo / mitad / ✓); finalizado se recuerda aunque se borre
+        { const k = ik(it), st = storeOwnedState.get(k) || (finishedSet.has(k) ? 'done' : null);
+          if (st) th.insertAdjacentHTML('beforeend', '<div class="status-dot st-own s-' + st + '"' + (st === 'doing' ? ' style="--p:' + storeOwnedPct.get(k) + '"' : '') + '></div>'); }
         lb.appendChild(stLine((it.title || '').toUpperCase(), false));
         lb.appendChild(stLine((it.author || '').toUpperCase(), true));
         d.onclick = () => openDetail(it);
