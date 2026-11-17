@@ -2172,10 +2172,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
                 // Usar el tiempo más alto de los dos (mayor progreso guardado)
                 const restoreTime = idbTime !== null ? idbTime : lsTime;
                 if (restoreTime && restoreTime > 0) {
-                    audio.currentTime = restoreTime;
+                    allowSeek(); audio.currentTime = restoreTime;
                 }
             }).catch(() => {
-                if (savedTime) audio.currentTime = parseFloat(savedTime);
+                if (savedTime) { allowSeek(); audio.currentTime = parseFloat(savedTime); }
             });
 
             // Volver a mostrar suavemente
@@ -2236,7 +2236,23 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => skip(details.seekOffset || -10));
         navigator.mediaSession.setActionHandler('seekforward', (details) => skip(details.seekOffset || 10));
-        navigator.mediaSession.setActionHandler('stop', () => { audio.pause(); audio.currentTime = 0; });
+        navigator.mediaSession.setActionHandler('stop', () => { audio.pause(); allowSeek(); audio.currentTime = 0; });
+        // Barra de progreso de la notificación / pantalla de bloqueo: respeta el bloqueo de seek
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime == null) return;
+            if (document.getElementById('lock-seek').checked) return; // bloqueo activo: se ignora
+            allowSeek();
+            if (details.fastSeek && 'fastSeek' in audio) audio.fastSeek(details.seekTime);
+            else audio.currentTime = details.seekTime;
+            updateProgressFill();
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: audio.duration,
+                    playbackRate: audio.playbackRate,
+                    position: audio.currentTime
+                });
+            } catch (e) {}
+        });
     }
 
     function togglePlay() {
@@ -2319,8 +2335,52 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
     };
 
     function skip(seconds) {
+        allowSeek();
         audio.currentTime += seconds;
-    }    function openSpeedModal() { 
+    }
+
+    // ---- Barra de la notificación / widget: mantener la posición sincronizada ----
+    let _lastPosPush = 0;
+    function updateMediaPosition(force) {
+        if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+        if (!isFinite(audio.duration) || audio.duration <= 0) return;
+        const now = Date.now();
+        if (!force && now - _lastPosPush < 1000) return;
+        _lastPosPush = now;
+        try {
+            navigator.mediaSession.setPositionState({
+                duration: audio.duration,
+                playbackRate: audio.playbackRate || 1,
+                position: Math.min(Math.max(audio.currentTime, 0), audio.duration)
+            });
+        } catch (e) {}
+    }
+    audio.addEventListener('timeupdate', () => updateMediaPosition(false));
+    ['play', 'pause', 'seeked', 'ratechange', 'durationchange', 'loadedmetadata'].forEach(ev =>
+        audio.addEventListener(ev, () => updateMediaPosition(true)));
+
+    // ---- Bloqueo de seek: ignora saltos externos (notificación, pantalla de bloqueo, Bluetooth...) ----
+    // Con el bloqueo activo, cualquier salto de posición que no venga de la propia app
+    // se deshace al instante: vuelve a donde estaba y sigue reproduciendo con normalidad.
+    let _lastGoodPos = 0, _allowSeekUntil = 0;
+    function allowSeek(ms) { _allowSeekUntil = Date.now() + (ms || 1000); }
+    function _seekLocked() { return document.getElementById('lock-seek').checked; }
+    audio.addEventListener('timeupdate', () => {
+        if (!audio.seeking) _lastGoodPos = audio.currentTime;
+    });
+    audio.addEventListener('seeked', () => {
+        if (!_seekLocked() || Date.now() < _allowSeekUntil) _lastGoodPos = audio.currentTime;
+    });
+    audio.addEventListener('loadedmetadata', () => { _lastGoodPos = audio.currentTime; });
+    document.getElementById('lock-seek').addEventListener('change', () => { _lastGoodPos = audio.currentTime; });
+    audio.addEventListener('seeking', () => {
+        if (!_seekLocked() || Date.now() < _allowSeekUntil) return;
+        const wasPlaying = !audio.paused;
+        allowSeek(800); // para que la propia restauración no se vuelva a revertir
+        audio.currentTime = _lastGoodPos;
+        if (wasPlaying && audio.paused) audio.play().catch(() => {});
+        updateProgressFill();
+    });    function openSpeedModal() { 
         const modal = document.getElementById('speed-bottom-modal');
         const content = document.getElementById('speed-content');
         modal.style.display = 'flex'; 
