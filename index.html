@@ -859,10 +859,10 @@ body.has-mini-player .player-container:not(.player-active) #library-container{pa
 .bp-text{display:flex;justify-content:space-between;gap:4px;font-size:.5rem;font-weight:700;color:#aaa;white-space:nowrap;text-transform:none}
 .bp-text span:last-child{overflow:hidden;text-overflow:ellipsis}
 /* Reproductor activo en vertical/móvil: la lista es una fila con scroll horizontal */
-#library-list.player-active .lib-group-title{flex:none;width:auto;align-self:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:0;letter-spacing:2px}
+#library-list.player-active .lib-group-title{flex:none;width:auto;height:85px;margin:0;align-self:flex-start;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:0;letter-spacing:2px}
 #library-list.player-active .lib-group-title::after{display:none}
 @media (orientation:landscape) and (min-width:660px){
-  #library-list.player-active .lib-group-title{writing-mode:horizontal-tb;transform:none;width:100%;align-self:stretch;padding:0 2px;letter-spacing:3px}
+  #library-list.player-active .lib-group-title{writing-mode:horizontal-tb;transform:none;width:100%;height:auto;align-self:stretch;justify-content:flex-start;padding:0 2px;letter-spacing:3px}
   #library-list.player-active .lib-group-title::after{display:block}
   .player-active .book-card{flex-wrap:wrap}
   .player-active .book-progress{width:100%;flex:1 0 100%;margin-top:-6px}
